@@ -677,28 +677,29 @@ Promise.race([Promise.all([document.fonts.ready, ...first]), new Promise((ok) =>
 </script>
 
 <style>
-#a2hs { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: end center; padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: rgb(8 7 6 / 0.82); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); font: 500 16px/1.45 system-ui, -apple-system, sans-serif; color: #14110e; }
+#a2hs { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: center; padding: 12px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: rgb(8 7 6 / 0.82); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); font: 500 15px/1.4 system-ui, -apple-system, sans-serif; color: #14110e; }
 #a2hs[hidden] { display: none; }
-#a2hs .card { width: min(100%, 440px); display: grid; gap: 14px; padding: 22px 20px 18px; border-radius: 26px; background: #f3ece3; box-shadow: 0 24px 60px rgb(0 0 0 / 0.55); }
-#a2hs h2 { margin: 0; font: 800 24px/1.1 system-ui, -apple-system, sans-serif; letter-spacing: -0.01em; }
+#a2hs .a2hs-card { width: min(100%, 440px); max-height: calc(100dvh - 24px - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px)); overflow: auto; display: grid; gap: 12px; padding: 20px 18px 16px; border-radius: 26px; background: #f3ece3; box-shadow: 0 24px 60px rgb(0 0 0 / 0.55); }
+#a2hs h2 { margin: 0; font: 800 22px/1.1 system-ui, -apple-system, sans-serif; letter-spacing: -0.01em; }
 #a2hs p { margin: 0; color: #3b342d; }
 #a2hs ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; counter-reset: s; }
 #a2hs li { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; counter-increment: s; }
 #a2hs li::before { content: counter(s); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #14110e; color: #f3ece3; font-weight: 700; font-size: 15px; }
 #a2hs b { font-weight: 700; }
-#a2hs .k { display: inline-grid; place-items: center; min-width: 30px; height: 26px; padding: 0 6px; border-radius: 8px; background: #fff; box-shadow: inset 0 0 0 1px rgb(20 17 14 / 0.18); font-weight: 700; vertical-align: -3px; }
-#a2hs .small { font-size: 14px; color: #5a5148; }
-#a2hs .row { display: grid; gap: 8px; }
+#a2hs .a2hs-k { display: inline-grid; place-items: center; min-width: 34px; height: 24px; padding: 0 6px; border-radius: 8px; background: #fff; box-shadow: inset 0 0 0 1px rgb(20 17 14 / 0.18); font-weight: 800; font-size: 14px; letter-spacing: 1px; line-height: 1; vertical-align: -4px; }
+#a2hs .a2hs-small { font-size: 14px; color: #5a5148; }
+#a2hs .a2hs-row { display: grid; gap: 8px; }
 #a2hs button { min-height: 48px; border: 0; border-radius: 99px; font: 700 16px system-ui, -apple-system, sans-serif; cursor: pointer; }
-#a2hs .go { background: #ffb000; color: #14110e; }
-#a2hs .skip { background: transparent; color: #14110e; box-shadow: inset 0 0 0 1.5px rgb(20 17 14 / 0.3); }
+#a2hs .a2hs-go { background: #ffb000; color: #14110e; }
+#a2hs .a2hs-skip { background: transparent; color: #14110e; box-shadow: inset 0 0 0 1.5px rgb(20 17 14 / 0.3); }
 </style>
 <div id="a2hs" role="dialog" aria-modal="true" aria-labelledby="a2hs-h" hidden>
-  <div class="card">
+  <div class="a2hs-card">
     <h2 id="a2hs-h">Otvor ma na celú obrazovku</h2>
-    <p>Pridaj si ukážku na plochu. Z ikony sa otvorí ako appka, bez líšt prehliadača.</p>
+    <p>Pridaj si ju na plochu. Z ikony sa otvorí ako appka, bez líšt prehliadača.</p>
     <ol id="a2hs-steps"></ol>
-    <div class="row" id="a2hs-row"><button class="skip" type="button">Pozrieť v prehliadači</button></div>
+    <p class="a2hs-small">Ak nič z toho nevidíš, otvor odkaz priamo v appke Safari.</p>
+    <div class="a2hs-row" id="a2hs-row"><button class="a2hs-skip" type="button">Pozrieť v prehliadači</button></div>
   </div>
 </div>
 <script>
@@ -712,26 +713,26 @@ Promise.race([Promise.all([document.fonts.ready, ...first]), new Promise((ok) =>
   const android = /Android/.test(ua);
   if (!ios && !android) return;
   const close = () => { box.hidden = true; try { sessionStorage.setItem('a2hs-poskladaj', '1'); } catch (e) {} };
-  row.querySelector('.skip').addEventListener('click', close);
+  row.querySelector('.a2hs-skip').addEventListener('click', close);
   if (ios) {
     const inApp = !/Safari\//.test(ua);
     steps.innerHTML = (inApp ? '<li><span>Najprv ju otvor v <b>Safari</b> (v appke daj Otvoriť v Safari).</span></li>' : '')
-      + '<li><span>Dole vedľa adresy ťukni na <span class="k">⋯</span>. <span class="small">V starších iOS je hneď ikona Zdieľať <span class="k">⬆</span>. Ak nevidíš ani jedno, otvor odkaz v appke Safari.</span></span></li>'
-      + '<li><span>Zvoľ <b>Zdieľať</b>, posuň nižšie a ťukni <b>Pridať na plochu</b>, potom <b>Pridať</b>.</span></li>'
+      + '<li><span>Pri adrese dole ťukni na <span class="a2hs-k">•••</span> <span class="a2hs-small">(v starších iOS rovno na Zdieľať <span class="a2hs-k">⬆</span>)</span></span></li>'
+      + '<li><span><b>Zdieľať</b> → posuň nižšie → <b>Pridať na plochu</b> → <b>Pridať</b>.</span></li>'
       + '<li><span>Na ploche otvor ikonu <b>Poskladaj si</b>.</span></li>';
   } else {
-    steps.innerHTML = '<li><span>Vpravo hore ťukni na <span class="k">⋮</span>.</span></li>'
+    steps.innerHTML = '<li><span>Vpravo hore ťukni na <span class="a2hs-k">⋮</span>.</span></li>'
       + '<li><span>Zvoľ <b>Pridať na plochu</b> alebo <b>Inštalovať aplikáciu</b>.</span></li>'
       + '<li><span>Na ploche otvor ikonu <b>Poskladaj si</b>.</span></li>';
     addEventListener('beforeinstallprompt', (e) => {
       e.preventDefault();
-      const b = document.createElement('button'); b.className = 'go'; b.type = 'button'; b.textContent = 'Pridať na plochu';
+      const b = document.createElement('button'); b.className = 'a2hs-go'; b.type = 'button'; b.textContent = 'Pridať na plochu';
       b.addEventListener('click', async () => { e.prompt(); try { await e.userChoice; } catch (err) {} close(); });
       row.prepend(b);
     });
   }
   box.hidden = false;
-  row.querySelector('.skip').focus();
+  row.querySelector('.a2hs-skip').focus();
 })();
 </script>
 </body></html>
