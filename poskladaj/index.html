@@ -677,41 +677,61 @@ Promise.race([Promise.all([document.fonts.ready, ...first]), new Promise((ok) =>
 </script>
 
 <style>
-#a2hs { position: fixed; z-index: 9999; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 12px); display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 14px 8px 14px 16px; border-radius: 18px; background: #f3ece3; color: #14110e; box-shadow: 0 18px 50px rgb(0 0 0 / 0.5); font: 500 15px/1.4 system-ui, -apple-system, sans-serif; }
+#a2hs { position: fixed; inset: 0; z-index: 2147483647; display: grid; place-items: end center; padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px)); background: rgb(8 7 6 / 0.82); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); font: 500 16px/1.45 system-ui, -apple-system, sans-serif; color: #14110e; }
 #a2hs[hidden] { display: none; }
+#a2hs .card { width: min(100%, 440px); display: grid; gap: 14px; padding: 22px 20px 18px; border-radius: 26px; background: #f3ece3; box-shadow: 0 24px 60px rgb(0 0 0 / 0.55); }
+#a2hs h2 { margin: 0; font: 800 24px/1.1 system-ui, -apple-system, sans-serif; letter-spacing: -0.01em; }
+#a2hs p { margin: 0; color: #3b342d; }
+#a2hs ol { margin: 0; padding: 0; list-style: none; display: grid; gap: 10px; counter-reset: s; }
+#a2hs li { display: grid; grid-template-columns: 30px 1fr; gap: 10px; align-items: start; counter-increment: s; }
+#a2hs li::before { content: counter(s); display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: #14110e; color: #f3ece3; font-weight: 700; font-size: 15px; }
 #a2hs b { font-weight: 700; }
-#a2hs p { margin: 0; }
-#a2hs .x { grid-row: 1 / span 2; grid-column: 2; width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgb(20 17 14 / 0.08); color: #14110e; font-size: 20px; cursor: pointer; }
-#a2hs .go { justify-self: start; min-height: 44px; padding: 0 18px; border: 0; border-radius: 99px; background: #14110e; color: #f3ece3; font: 600 15px system-ui, sans-serif; cursor: pointer; }
+#a2hs .k { display: inline-grid; place-items: center; min-width: 30px; height: 26px; padding: 0 6px; border-radius: 8px; background: #fff; box-shadow: inset 0 0 0 1px rgb(20 17 14 / 0.18); font-weight: 700; vertical-align: -3px; }
+#a2hs .small { font-size: 14px; color: #5a5148; }
+#a2hs .row { display: grid; gap: 8px; }
+#a2hs button { min-height: 48px; border: 0; border-radius: 99px; font: 700 16px system-ui, -apple-system, sans-serif; cursor: pointer; }
+#a2hs .go { background: #ffb000; color: #14110e; }
+#a2hs .skip { background: transparent; color: #14110e; box-shadow: inset 0 0 0 1.5px rgb(20 17 14 / 0.3); }
 </style>
-<div id="a2hs" role="dialog" aria-label="Pridať na plochu" hidden>
-  <p id="a2hs-t"></p>
-  <button class="x" type="button" aria-label="Zavrieť">✕</button>
+<div id="a2hs" role="dialog" aria-modal="true" aria-labelledby="a2hs-h" hidden>
+  <div class="card">
+    <h2 id="a2hs-h">Otvor ma na celú obrazovku</h2>
+    <p>Pridaj si ukážku na plochu. Z ikony sa otvorí ako appka, bez líšt prehliadača.</p>
+    <ol id="a2hs-steps"></ol>
+    <div class="row" id="a2hs-row"><button class="skip" type="button">Pozrieť v prehliadači</button></div>
+  </div>
 </div>
 <script>
 (() => {
-  const box = document.getElementById('a2hs'), t = document.getElementById('a2hs-t');
+  const box = document.getElementById('a2hs'), steps = document.getElementById('a2hs-steps'), row = document.getElementById('a2hs-row');
   const standalone = matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
-  let seen = false; try { seen = localStorage.getItem('a2hs-poskladaj') === '1'; } catch (e) {}
+  let seen = false; try { seen = sessionStorage.getItem('a2hs-poskladaj') === '1'; } catch (e) {}
   if (standalone || seen) return;
-  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
-  const android = /Android/.test(navigator.userAgent);
+  const ua = navigator.userAgent;
+  const ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const android = /Android/.test(ua);
   if (!ios && !android) return;
-  const close = () => { box.hidden = true; try { localStorage.setItem('a2hs-poskladaj', '1'); } catch (e) {} };
-  box.querySelector('.x').addEventListener('click', close);
+  const close = () => { box.hidden = true; try { sessionStorage.setItem('a2hs-poskladaj', '1'); } catch (e) {} };
+  row.querySelector('.skip').addEventListener('click', close);
   if (ios) {
-    t.innerHTML = '<b>Na celú obrazovku:</b> ťukni na <b>Zdieľať</b> (štvorček so šípkou hore), potom <b>Pridať na plochu</b> a otvor ikonu Poskladaj si.';
-    box.hidden = false; return;
+    const inApp = !/Safari\//.test(ua);
+    steps.innerHTML = (inApp ? '<li><span>Najprv ju otvor v <b>Safari</b> (v appke daj Otvoriť v Safari).</span></li>' : '')
+      + '<li><span>Dole vedľa adresy ťukni na <span class="k">⋯</span>. <span class="small">V starších iOS je hneď ikona Zdieľať <span class="k">⬆</span>. Ak nevidíš ani jedno, otvor odkaz v appke Safari.</span></span></li>'
+      + '<li><span>Zvoľ <b>Zdieľať</b>, posuň nižšie a ťukni <b>Pridať na plochu</b>, potom <b>Pridať</b>.</span></li>'
+      + '<li><span>Na ploche otvor ikonu <b>Poskladaj si</b>.</span></li>';
+  } else {
+    steps.innerHTML = '<li><span>Vpravo hore ťukni na <span class="k">⋮</span>.</span></li>'
+      + '<li><span>Zvoľ <b>Pridať na plochu</b> alebo <b>Inštalovať aplikáciu</b>.</span></li>'
+      + '<li><span>Na ploche otvor ikonu <b>Poskladaj si</b>.</span></li>';
+    addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      const b = document.createElement('button'); b.className = 'go'; b.type = 'button'; b.textContent = 'Pridať na plochu';
+      b.addEventListener('click', async () => { e.prompt(); try { await e.userChoice; } catch (err) {} close(); });
+      row.prepend(b);
+    });
   }
-  t.innerHTML = '<b>Na celú obrazovku:</b> v menu prehliadača <b>⋮</b> zvoľ <b>Pridať na plochu</b>.';
   box.hidden = false;
-  addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    t.innerHTML = '<b>Na celú obrazovku</b> ako appka:';
-    const b = document.createElement('button'); b.className = 'go'; b.type = 'button'; b.textContent = 'Pridať na plochu';
-    b.addEventListener('click', async () => { e.prompt(); try { await e.userChoice; } catch (err) {} close(); });
-    t.after(b);
-  });
+  row.querySelector('.skip').focus();
 })();
 </script>
 </body></html>
