@@ -1,0 +1,717 @@
+<!doctype html>
+<html lang="sk"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Poskladaj si</title>
+<script>/* large screens: lay out at 1440 and scale up; --vh carries the layout viewport height because vh does not follow zoom */(function(){function f(){var r=document.documentElement,w=innerWidth,z=w>=1800?w/1440:1;r.style.zoom=z>1?z.toFixed(4):'';r.style.setProperty('--vh',(innerHeight/z)+'px')}f();addEventListener('resize',f)})()</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,100..900&family=JetBrains+Mono:wght@400;500;600&display=swap">
+<link rel="preload" as="image" href="poskladaj/bun-top.webp"><link rel="preload" as="image" href="poskladaj/patty.webp"><link rel="preload" as="image" href="poskladaj/bun-bottom.webp">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.13.0/gsap.min.js"></script>
+<style>
+/* Poskladaj si: the exploded view of top food commercials turned into the ordering tool. A dark studio with one warm key
+   light; every dish is a stack of real photographed layers (bun, patty, cheddar...) floating apart on one axis, each with a
+   leader line and a label like an engineering drawing. Removing an ingredient flies its layer out, an extra drops in with
+   weight and a thud, the price rolls. "Poskladať" drops the stack into the finished dish, Pridať sends it to the cart.
+   For places where guests change dishes: burger bars, langoš stands, pizzerias. */
+:root { --bg: #0b0a09; --bg2: #15120f; --ink: #f6f0e7; --mut: #b9ad9d; --line: rgb(246 240 231 / 0.14); --line2: rgb(246 240 231 / 0.3);
+  --acc: #ffb000; --accR: 255 176 0; --onacc: #0b0a09; --d: 'Archivo', system-ui, sans-serif; --m: 'JetBrains Mono', ui-monospace, monospace; color-scheme: dark; }
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+html { background: var(--bg); }
+body.lock .pill, body.lock .sum, body.lock .word { visibility: hidden; }
+body { color: var(--ink); background: var(--bg); font: 400 15px/1.45 var(--d); -webkit-font-smoothing: antialiased; overflow: hidden; }
+button { font: inherit; color: inherit; cursor: pointer; background: none; border: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+button:focus { outline: none; } button:focus-visible { outline: 2px solid var(--acc); outline-offset: 3px; }
+.mono { font-family: var(--m); }
+.k { font: 600 11px/1.3 var(--m); letter-spacing: 0.09em; text-transform: uppercase; color: var(--mut); }
+.tag { display: inline-block; font: 600 9.5px/1 var(--m); letter-spacing: 0.08em; text-transform: uppercase; padding: 3px 5px 2px; border-radius: 4px; border: 1px solid var(--line2); color: var(--mut); vertical-align: 2px; }
+
+/* ---------- app shell: phone is one column, the dock sits under the stage ---------- */
+.app { height: 100vh; height: 100dvh; display: flex; flex-direction: column; position: relative; }
+.top { flex: none; height: 58px; display: flex; align-items: center; gap: 6px; padding: 0 8px 0 14px; position: relative; z-index: 20; }
+.brand { margin-right: auto; display: grid; line-height: 1; }
+.brand b { font: 800 22px/1 var(--d); font-stretch: 80%; letter-spacing: -0.02em; }
+.brand span { font: 500 9.5px/1 var(--m); letter-spacing: 0.08em; text-transform: uppercase; color: var(--mut); margin-top: 4px; white-space: nowrap; }
+.tabs { display: flex; gap: 2px; padding: 3px; border-radius: 99px; background: rgb(246 240 231 / 0.06); border: 1px solid var(--line); }
+.tabs button { height: 44px; padding: 0 12px; border-radius: 99px; font: 650 14px/1 var(--d); font-stretch: 92%; color: var(--mut); transition: color .25s, background-color .25s; white-space: nowrap; }
+.tabs button.on { background: var(--acc); color: var(--onacc); }
+.ib { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; color: var(--mut); }
+.ib svg { width: 20px; height: 20px; }
+.ib.on { color: var(--ink); }
+.left, .spec, .cartpill, .hours { display: none; }
+
+.mid { flex: 1; min-height: 0; display: flex; flex-direction: column; position: relative; }
+.stage { flex: 1; min-height: 0; position: relative; overflow: hidden; touch-action: none; }
+/* the studio: one warm key light from the upper left, a pool in the dish colour behind the food, a dark floor glow */
+.stage::before { content: ''; position: absolute; inset: -20% -30% 0 -30%; background: radial-gradient(52% 46% at 38% 34%, rgb(255 226 190 / 0.10), transparent 70%), radial-gradient(40% 38% at 50% 52%, rgb(var(--accR) / 0.13), transparent 72%); transition: background 0.8s; pointer-events: none; }
+.word { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-50%); text-align: center; pointer-events: none; white-space: nowrap;
+  font: 900 31vw/0.82 var(--d); font-stretch: 62%; letter-spacing: -0.035em; color: rgb(var(--accR) / 0.09); padding-top: 0.12em; }
+.word i { display: inline-block; font-style: normal; }
+.floor { position: absolute; left: 0; top: 0; width: 200px; height: 60px; border-radius: 50%; background: radial-gradient(closest-side, rgb(0 0 0 / 0.75), transparent); pointer-events: none; will-change: transform; }
+.dish { position: absolute; inset: 0; }
+.ly { position: absolute; left: 0; top: 0; transform-origin: 0 0; will-change: transform; }
+.ly .fl { position: absolute; inset: 0; transform-origin: 50% 70%; }
+.ly img { position: absolute; left: 0; top: 0; width: 100%; height: 100%; display: block; user-select: none; -webkit-user-drag: none; }
+.ly .sh { filter: brightness(0) blur(7px); transform: translate(2%, 9%) scale(0.98); opacity: 0; }
+.ly .sh.flat { filter: brightness(0) blur(4px); transform: translate(1%, 3%) scale(0.97); }
+.ly .gl { position: absolute; inset: 0; -webkit-mask-size: 100% 100%; mask-size: 100% 100%; background: linear-gradient(100deg, transparent 38%, rgb(255 244 228 / 0.55) 50%, transparent 62%) 160% 0 / 260% 100% no-repeat; mix-blend-mode: screen; opacity: 0; pointer-events: none; }
+.ly button.hit { position: absolute; inset: 12% 6%; border-radius: 40%; }
+svg.lead { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+svg.lead path { fill: none; stroke: var(--line2); stroke-width: 1; }
+svg.lead circle { fill: var(--acc); stroke: var(--bg); stroke-width: 1.5; }
+svg.lead circle.o { fill: none; stroke: var(--acc); stroke-opacity: 0.35; }
+svg.lead .ghost path { stroke-dasharray: 3 4; }
+svg.lead .ghost circle { fill: var(--bg); stroke: var(--line2); }
+svg.lead ellipse.slot { fill: rgb(246 240 231 / 0.025); stroke: rgb(246 240 231 / 0.22); stroke-dasharray: 4 5; }
+.labels { position: absolute; inset: 0; pointer-events: none; }
+.lb { position: absolute; left: 0; top: 0; min-height: 44px; display: flex; align-items: center; gap: 7px; padding: 3px 6px; text-align: left; pointer-events: auto; border-radius: 10px; transition: background-color .25s; }
+.lb:hover { background: rgb(246 240 231 / 0.05); }
+.lb .ix { flex: none; align-self: flex-start; margin-top: 5px; font: 600 10px/16px var(--m); color: var(--acc); }
+.lb .tx { display: flex; flex-direction: column; min-width: 0; }
+.lb .nm { font: 640 15px/1.15 var(--d); font-stretch: 92%; letter-spacing: -0.005em; }
+.lb .dt { font: 500 11px/1.3 var(--m); color: var(--mut); letter-spacing: 0.01em; white-space: nowrap; }
+.lb.left { flex-direction: row-reverse; text-align: right; }
+.lb.left .tx { align-items: flex-end; }
+.lb.off .nm { color: var(--mut); text-decoration: line-through; text-decoration-color: rgb(var(--accR) / 0.8); text-decoration-thickness: 2px; }
+.lb.off .dt { color: var(--acc); }
+.lb.ghost .nm { color: var(--mut); }
+.lb.ghost .dt, .lb.ext .dt { color: var(--acc); }
+.lb.fixed { cursor: default; }
+.lb.fixed .dt { color: rgb(185 173 157 / 0.85); }
+.pill { position: absolute; left: 50%; top: 10px; transform: translateX(-50%); max-width: calc(100% - 24px); min-height: 44px; display: flex; align-items: center; gap: 8px; padding: 6px 14px 6px 8px; border-radius: 99px; background: rgb(21 18 15 / 0.82); border: 1px solid var(--line); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); white-space: nowrap; }
+.pill .ico { width: 30px; height: 30px; border-radius: 50%; background: var(--acc); color: var(--onacc); display: grid; place-items: center; flex: none; }
+.pill .ico svg { width: 16px; height: 16px; }
+.pill b { font: 650 14px/1.1 var(--d); font-stretch: 90%; }
+.pill span { font: 500 12px/1.1 var(--m); color: var(--mut); overflow: hidden; text-overflow: ellipsis; }
+.pill[hidden] { display: none; }
+.pill.same .ico { background: rgb(246 240 231 / 0.1); color: var(--ink); }
+.sum { position: absolute; left: 12px; right: 12px; bottom: 8px; display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; pointer-events: none; }
+.sum span { font: 500 12px/1 var(--m); padding: 7px 10px; border-radius: 99px; background: rgb(21 18 15 / 0.8); border: 1px solid var(--line); color: var(--ink); }
+.sum span.minus { color: var(--mut); }
+.sum span.hint { border: 0; background: none; color: var(--mut); font-size: 11.5px; }
+.sum span.plus { border-color: rgb(var(--accR) / 0.5); }
+.toast { position: absolute; left: 50%; top: 62px; transform: translateX(-50%); z-index: 6; display: flex; align-items: center; gap: 8px; padding: 9px 14px; border-radius: 99px; background: var(--ink); color: var(--bg); font: 600 13px/1.2 var(--d); white-space: nowrap; opacity: 0; pointer-events: none; max-width: calc(100% - 24px); overflow: hidden; text-overflow: ellipsis; }
+.toast::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--acc); box-shadow: 0 0 0 3px rgb(var(--accR) / 0.3); flex: none; }
+
+/* dock: extras as chips, then the two actions, then the cart bar */
+.dock { flex: none; padding: 6px 0 calc(10px + env(safe-area-inset-bottom)); position: relative; z-index: 5; background: linear-gradient(transparent, var(--bg) 18px); }
+.chips { display: flex; gap: 8px; overflow-x: auto; padding: 4px 12px 8px; scrollbar-width: none; -webkit-mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(90deg, transparent, #000 12px, #000 calc(100% - 24px), transparent); }
+.chips::-webkit-scrollbar { display: none; }
+.chip { flex: none; height: 44px; display: flex; align-items: center; gap: 7px; padding: 0 14px 0 12px; border-radius: 99px; border: 1px solid var(--line); background: rgb(246 240 231 / 0.04); font: 620 14px/1 var(--d); font-stretch: 92%; white-space: nowrap; transition: background-color .25s, color .25s, border-color .25s; }
+.chip .p { font: 500 12px/1 var(--m); color: var(--mut); }
+.chip .pl { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; background: rgb(246 240 231 / 0.1); font: 600 15px/1 var(--m); }
+.chip.on { background: var(--acc); border-color: var(--acc); color: var(--onacc); }
+.chip.on .p { color: rgb(11 10 9 / 0.72); }
+.chip.on .pl { background: rgb(11 10 9 / 0.14); }
+.chip.day { border-color: rgb(var(--accR) / 0.55); }
+.chip .d { font: 600 9.5px/1 var(--m); letter-spacing: 0.08em; text-transform: uppercase; color: var(--acc); }
+.chip.on .d { color: var(--onacc); }
+.chip.out { opacity: 0.45; pointer-events: none; }
+.act { display: flex; gap: 8px; padding: 2px 12px 0; }
+.mode { flex: none; height: 54px; padding: 0 16px 0 12px; border-radius: 99px; border: 1px solid var(--line2); display: flex; align-items: center; gap: 8px; font: 650 15px/1 var(--d); font-stretch: 92%; }
+.mode svg { width: 22px; height: 22px; }
+.add { flex: 1; height: 54px; border-radius: 99px; background: var(--acc); color: var(--onacc); display: flex; align-items: center; justify-content: space-between; padding: 0 20px; font: 750 17px/1 var(--d); font-stretch: 90%; transition: background-color .5s; }
+.add .pr { font: 600 15px/1 var(--m); font-variant-numeric: tabular-nums; }
+.cart { margin: 8px 12px 0; height: 0; overflow: hidden; }
+.cart button { width: 100%; height: 58px; border-radius: 18px; background: var(--ink); color: var(--bg); display: flex; align-items: center; gap: 12px; padding: 0 8px 0 10px; }
+.cart .n { width: 38px; height: 38px; border-radius: 12px; background: var(--bg); color: var(--ink); display: grid; place-items: center; font: 700 16px/1 var(--m); }
+.cart .t { text-align: left; display: grid; line-height: 1.15; margin-right: auto; }
+.cart .t b { font: 700 15px/1.15 var(--d); }
+.cart .t span { font: 500 12px/1.2 var(--m); color: #4b443c; }
+.cart .go { height: 42px; padding: 0 16px; border-radius: 13px; background: var(--acc); color: var(--onacc); display: flex; align-items: center; font: 700 15px/1 var(--d); }
+.skip { position: fixed; z-index: 40; right: 12px; top: 66px; height: 44px; padding: 0 16px; border-radius: 99px; background: rgb(246 240 231 / 0.12); border: 1px solid var(--line); font: 600 13px/1 var(--m); visibility: hidden; }
+.intro-t { position: absolute; left: 0; right: 0; top: 50%; transform: translateY(-58%); z-index: 0; text-align: center; pointer-events: none; font: 900 22vw/0.86 var(--d); color: var(--ink); font-stretch: 62%; letter-spacing: -0.02em; text-transform: uppercase; visibility: hidden; padding-top: 0.15em; }
+.intro-t span { display: block; overflow: hidden; padding-top: 0.12em; margin-top: -0.12em; }
+.intro-t span i { display: block; font-style: normal; }
+.intro-t em { font-style: normal; color: var(--acc); }
+
+/* ---------- order sheet ---------- */
+.sheet { position: fixed; inset: 0; z-index: 60; visibility: hidden; }
+.scrim { position: absolute; inset: 0; background: rgb(0 0 0 / 0.6); opacity: 0; }
+.panel { position: absolute; left: 0; right: 0; bottom: 0; max-height: 92%; overflow: auto; background: #f6f0e7; color: #15120f; border-radius: 24px 24px 0 0; padding: 8px 18px calc(20px + env(safe-area-inset-bottom)); transform: translateY(105%); }
+.panel .grab { width: 40px; height: 4px; border-radius: 4px; background: rgb(21 18 15 / 0.2); margin: 4px auto 12px; }
+.panel h3 { margin: 0; font: 850 30px/1 var(--d); font-stretch: 70%; letter-spacing: -0.01em; text-transform: uppercase; padding-top: 0.1em; }
+.ph { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.x { width: 44px; height: 44px; border-radius: 50%; display: grid; place-items: center; background: rgb(21 18 15 / 0.06); }
+.x svg { width: 18px; height: 18px; }
+.line { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 0; border-bottom: 1px solid rgb(21 18 15 / 0.12); }
+.line b { font: 700 16px/1.2 var(--d); }
+.line .ds { font: 500 12.5px/1.35 var(--m); color: #5a5148; grid-column: 1; }
+.line .lp { font: 600 14px/1.2 var(--m); text-align: right; }
+.qty { grid-column: 2; display: flex; align-items: center; gap: 4px; justify-self: end; }
+.qty button { width: 44px; height: 44px; border-radius: 50%; border: 1px solid rgb(21 18 15 / 0.18); font: 600 18px/1 var(--m); }
+.qty span { min-width: 18px; text-align: center; font: 600 14px var(--m); }
+.seg { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin: 14px 0 6px; }
+.seg button { min-height: 52px; border-radius: 14px; border: 1px solid rgb(21 18 15 / 0.16); text-align: left; padding: 8px 12px; display: grid; }
+.seg button b { font: 700 15px/1.2 var(--d); }
+.seg button span { font: 500 12px/1.3 var(--m); color: #5a5148; }
+.seg button.on { border-color: #15120f; box-shadow: inset 0 0 0 1px #15120f; }
+.fields { display: grid; gap: 6px; margin: 10px 0; }
+.fields div { display: flex; justify-content: space-between; gap: 10px; padding: 12px 14px; border-radius: 14px; background: rgb(21 18 15 / 0.05); font: 500 14px/1.3 var(--d); }
+.fields div span { color: #5a5148; font: 500 12.5px/1.3 var(--m); }
+.tot { display: flex; justify-content: space-between; align-items: baseline; margin: 14px 0 12px; font: 700 18px/1.2 var(--d); }
+.tot b { font: 700 22px/1 var(--m); }
+.send { width: 100%; height: 58px; border-radius: 16px; background: #15120f; color: #f6f0e7; font: 750 17px/1 var(--d); display: flex; align-items: center; justify-content: center; gap: 10px; }
+.send .tag { border-color: rgb(246 240 231 / 0.35); color: rgb(246 240 231 / 0.75); }
+.fine { font: 500 12px/1.45 var(--m); color: #5a5148; margin: 10px 0 0; }
+.done { text-align: left; }
+.done .big { font: 900 76px/0.85 var(--d); font-stretch: 62%; text-transform: uppercase; margin: 10px 0 8px; padding-top: 0.1em; }
+.done p { margin: 0 0 6px; font: 500 15px/1.45 var(--d); }
+.ticket { margin: 14px 0; padding: 16px 16px 18px; border-radius: 6px; background: #fffdf8; box-shadow: 0 1px 0 rgb(21 18 15 / 0.08), 0 12px 30px -12px rgb(21 18 15 / 0.35); font: 500 13.5px/1.55 var(--m); color: #15120f; position: relative; }
+.ticket::after { content: ''; position: absolute; left: 0; right: 0; bottom: -6px; height: 7px; background: radial-gradient(circle at 5px 0, transparent 4px, #fffdf8 4.5px) 0 0 / 10px 7px repeat-x; }
+.ticket .th { display: flex; justify-content: space-between; font: 700 12px/1.3 var(--m); letter-spacing: 0.06em; text-transform: uppercase; border-bottom: 1px dashed rgb(21 18 15 / 0.3); padding-bottom: 8px; margin-bottom: 8px; }
+.ticket .it { font-weight: 700; text-transform: uppercase; }
+.ticket .md { padding-left: 2ch; }
+.ticket .md.minus { color: #a22912; }
+
+/* ---------- 360 ---------- */
+@media (max-width: 374px) {
+  .brand span { display: none; }
+  .tabs button { padding: 0 10px; font-size: 13.5px; }
+  .mode { padding: 0 12px 0 10px; font-size: 14px; }
+  .add { padding: 0 16px; font-size: 16px; }
+}
+
+/* ---------- desktop: left the story and the menu, middle the stage, right the build sheet ---------- */
+@media (min-width: 1000px) {
+  body { overflow: auto; }
+  .app { display: grid; grid-template-columns: 350px minmax(0, 1fr) 340px; grid-template-rows: 76px minmax(0, 1fr); column-gap: 28px; padding: 0 40px; height: var(--vh, 100vh); min-height: 600px; }
+  .top { grid-column: 1 / -1; padding: 0; height: 76px; gap: 12px; }
+  .brand b { font-size: 26px; }
+  .brand span { font-size: 10px; }
+  .tabs { display: none; }
+  .hours { display: block; font: 500 12px/1.3 var(--m); color: var(--mut); margin-right: 8px; text-align: right; }
+  .hours b { color: var(--ink); font-weight: 600; }
+  .cartpill { display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 8px 0 16px; border-radius: 99px; background: rgb(246 240 231 / 0.07); border: 1px solid var(--line); font: 600 14px/1 var(--d); }
+  .cartpill .n { min-width: 32px; height: 32px; padding: 0 8px; border-radius: 99px; background: rgb(246 240 231 / 0.1); display: grid; place-items: center; font: 700 13px/1 var(--m); }
+  .cartpill.full { background: var(--ink); color: var(--bg); }
+  .cartpill.full .n { background: var(--acc); color: var(--onacc); }
+  .left { display: flex; flex-direction: column; gap: 14px; padding: 8px 0 20px; min-height: 0; overflow: auto; scrollbar-width: none; }
+  .left h1 { margin: 0; font: 900 80px/0.84 var(--d); font-stretch: 62%; letter-spacing: -0.03em; text-transform: uppercase; padding-top: 0.12em; }
+  .left h1 span { display: block; overflow: hidden; padding-top: 0.12em; margin-top: -0.12em; }
+  .left h1 span i { display: block; font-style: normal; }
+  .left h1 em { font-style: normal; color: var(--acc); }
+  .lede { margin: 0; font: 450 15px/1.45 var(--d); color: var(--mut); max-width: 34ch; }
+  .lede b { color: var(--ink); font-weight: 600; }
+  .dl { display: grid; gap: 6px; }
+  .dl button { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 12px; padding: 10px 14px; border-radius: 16px; border: 1px solid var(--line); text-align: left; transition: border-color .25s, background-color .25s; }
+  .dl button b { font: 700 19px/1.1 var(--d); font-stretch: 85%; }
+  .dl button span { font: 500 12px/1.3 var(--m); color: var(--mut); grid-column: 1; }
+  .dl button em { font: 600 14px/1 var(--m); font-style: normal; grid-row: 1 / span 2; grid-column: 2; }
+  .dl button.on { border-color: rgb(var(--accR) / 0.7); background: rgb(var(--accR) / 0.08); }
+  .card { padding: 12px 14px; border-radius: 16px; background: rgb(246 240 231 / 0.04); border: 1px solid var(--line); display: grid; gap: 8px; }
+  .card .row { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+  .card p { margin: 0; font: 500 14.5px/1.4 var(--d); }
+  .card p span { color: var(--mut); }
+  .card .btn { height: 44px; padding: 0 16px; border-radius: 99px; background: var(--ink); color: var(--bg); font: 700 14px/1 var(--d); white-space: nowrap; }
+  .week { display: grid; grid-template-columns: repeat(7, 1fr); gap: 4px; }
+  .week span { display: grid; gap: 3px; justify-items: center; padding: 6px 0; border-radius: 8px; font: 500 10.5px/1.1 var(--m); color: var(--mut); text-align: center; }
+  .week span b { font: 600 10px/1 var(--m); letter-spacing: 0.06em; text-transform: uppercase; color: var(--ink); }
+  .week .dot, .wk .dot { display: inline-block; width: 9px; height: 9px; border-radius: 50%; }
+  .dot.egg { background: #f4d27a; } .dot.jalapeno { background: #5fbf4f; }
+  .wk { font: 500 11px/1.4 var(--m) !important; color: var(--mut); }
+  .week span.on { background: rgb(var(--accR) / 0.14); color: var(--ink); box-shadow: inset 0 0 0 1px rgb(var(--accR) / 0.6); }
+  .foot { margin-top: auto; font: 500 11px/1.5 var(--m); color: var(--mut); }
+  .mid { padding-bottom: 18px; }
+  .stage { border-radius: 28px; }
+  .word { font-size: 300px; }
+  .chips { display: none; }
+  .dock { padding: 10px 0 0; background: none; }
+  .act { justify-content: center; }
+  .act .add { display: none; }
+  .mode { height: 52px; padding: 0 22px 0 16px; }
+  .cart { display: none; }
+  .spec { display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow: auto; padding: 8px 2px 24px; scrollbar-width: none; }
+  .spec h2 { margin: 2px 0 0; font: 850 40px/0.9 var(--d); font-stretch: 70%; text-transform: uppercase; letter-spacing: -0.01em; padding-top: 0.1em; }
+  .spec .desc { margin: 4px 0 0; font: 450 14px/1.4 var(--d); color: var(--mut); }
+  .rows { display: grid; gap: 0; border-top: 1px solid var(--line); }
+  .rows div { display: flex; justify-content: space-between; gap: 10px; padding: 9px 0; border-bottom: 1px solid var(--line); font: 500 14px/1.3 var(--d); }
+  .rows div span:last-child { font: 500 13px/1.3 var(--m); color: var(--mut); }
+  .rows div.minus span:first-child { color: var(--mut); }
+  .rows div.plus span:last-child { color: var(--ink); }
+  .stot { display: flex; justify-content: space-between; align-items: baseline; font: 700 16px/1 var(--d); }
+  .stot b { font: 600 26px/1 var(--m); font-variant-numeric: tabular-nums; }
+  .spec .add { flex: none; display: flex; }
+  .spec .fine2 { margin: -4px 0 0; font: 500 11.5px/1.45 var(--m); color: var(--mut); }
+  .xl { display: grid; gap: 6px; }
+  .xr { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 6px 6px 6px 12px; border-radius: 14px; border: 1px solid var(--line); text-align: left; width: 100%; transition: border-color .25s, background-color .25s; }
+  .xr .t { margin-right: auto; display: grid; gap: 2px; }
+  .xr .t b { font: 650 15px/1.15 var(--d); font-stretch: 92%; }
+  .xr .t span { font: 500 11.5px/1.2 var(--m); color: var(--mut); }
+  .xr .p { font: 500 13px/1 var(--m); color: var(--mut); white-space: nowrap; }
+  .xr .pl { width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgb(246 240 231 / 0.08); font: 600 18px/1 var(--m); flex: none; }
+  .xr.on { border-color: rgb(var(--accR) / 0.7); background: rgb(var(--accR) / 0.08); }
+  .xr.on .pl { background: var(--acc); color: var(--onacc); }
+  .xr.day .t span { color: var(--acc); }
+  .feed { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .feed li { font: 500 12.5px/1.4 var(--m); color: var(--mut); display: flex; gap: 8px; }
+  .feed li b { color: var(--ink); font-weight: 600; min-width: 3.2ch; text-align: right; }
+  .pill { top: 16px; }
+  .toast { top: 72px; }
+  .panel { left: auto; top: 0; width: 460px; max-height: none; border-radius: 26px 0 0 26px; transform: translateX(105%); padding: 20px 26px 26px; }
+  .panel .grab { display: none; }
+  .skip { right: 30px; top: auto; bottom: 26px; }
+  .intro-t { display: none; }
+}
+@media (min-width: 1000px) and (max-height: 760px), (min-width: 1800px) and (max-height: 1010px) {
+  .left h1 { font-size: 70px; }
+  .left { gap: 12px; }
+  .lede { font-size: 14.5px; }
+  .dl button { padding: 9px 12px; }
+  .card { padding: 10px 12px; }
+}
+@media (prefers-reduced-motion: reduce) { .ly .fl { animation: none; } }
+</style>
+
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0b0a09">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
+<meta name="apple-mobile-web-app-title" content="Poskladaj si">
+<link rel="apple-touch-icon" href="icon-180.png">
+</head>
+<body class="lock">
+<div class="app" id="app">
+  <header class="top">
+    <div class="brand"><b>Bistro Lipa</b><span>Poskladaj si · ukážka</span></div>
+    <div class="tabs" id="tabs" role="tablist" aria-label="Jedlo"></div>
+    <div class="hours"><b>Otvorené do 21:00</b><br>varíme na objednávku</div>
+    <button class="ib on" id="snd" aria-label="Zvuk zapnutý" aria-pressed="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9.5v5h3.5L12 18.5v-13L7.5 9.5z"/><path class="w1" d="M15.5 9a4 4 0 0 1 0 6"/><path class="w2" d="M18 6.5a7.5 7.5 0 0 1 0 11"/></svg></button>
+    <button class="cartpill" id="cartpill" aria-label="Košík"><span id="cpT">Košík</span><span class="n" id="cpN">0</span></button>
+  </header>
+
+  <aside class="left">
+    <p class="k">Pre burgrárne, langošárne a pizzerie</p>
+    <h1 id="h1"><span><i>Poskladaj</i></span><span><i>si<em>.</em></i></span></h1>
+    <p class="lede">Jedlo sa rozloží na vrstvy. <b>Uber, čo nechceš, pridaj, čo chceš</b> a kuchyňa dostane presne toto. Nabudúce ťa tu čaká ako minule.</p>
+    <nav class="dl" id="dl" aria-label="Jedlá"></nav>
+    <div class="card" id="againCard"></div>
+    <div class="card" id="dayCard"></div>
+    <p class="foot">Ukážka smeru Podnos. Fiktívne údaje sú označené. Ceny sú rovnaké ako v reštaurácii, odobrať prílohu je zadarmo.</p>
+  </aside>
+
+  <section class="mid">
+    <div class="stage" id="stage">
+      <div class="word" id="word"></div>
+      <div class="floor" id="floor"></div>
+      <div class="intro-t" id="introT"><span><i>Poskladaj</i></span><span><i>si<em>.</em></i></span></div>
+      <div class="dish" id="dish"></div>
+      <svg class="lead" id="lead"></svg>
+      <div class="labels" id="labels"></div>
+      <button class="pill" id="pill" hidden></button>
+      <div class="sum" id="sum"></div>
+      <div class="toast" id="toast"></div>
+    </div>
+    <div class="dock">
+      <div class="chips" id="chips"></div>
+      <div class="act">
+        <button class="mode" id="mode"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M5 7h14M5 12h14M5 17h14"/></svg><span>Rozložiť</span></button>
+        <button class="add" id="add"><span>Pridať</span><span class="pr" id="addP">9,90 €</span></button>
+      </div>
+      <div class="cart" id="cart"><button id="cartBtn"><span class="n" id="cN">0</span><span class="t"><b id="cT">1 položka</b><span id="cS">0,00 €</span></span><span class="go">Objednať</span></button></div>
+    </div>
+  </section>
+
+  <aside class="spec" id="spec">
+    <div><p class="k" id="sK">Tvoj burger</p><h2 id="sName">Hovädzí burger</h2><p class="desc" id="sDesc"></p></div>
+    <div class="rows" id="sRows"></div>
+    <div class="stot"><span>Spolu</span><b id="sTot">9,90 €</b></div>
+    <button class="add" id="add2"><span>Pridať do košíka</span><span class="pr" id="add2P">9,90 €</span></button>
+    <p class="fine2">Odobrať prílohu je zadarmo. Ceny navyše sú pri každej položke.</p>
+    <div class="xl"><p class="k">Pridaj navyše</p><div class="xl" id="xlist"></div></div>
+    <div><p class="k" style="margin:0 0 8px">Dnes v kuchyni <span class="tag">ukážka</span></p><ul class="feed" id="feed"></ul></div>
+  </aside>
+</div>
+
+<div class="sheet" id="sheet" aria-hidden="true">
+  <div class="scrim" id="scrim"></div>
+  <div class="panel" id="panel" role="dialog" aria-label="Objednávka">
+    <div class="grab"></div>
+    <div id="pCart">
+      <div class="ph"><h3>Tvoja objednávka</h3><button class="x" id="close1" aria-label="Zavrieť"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      <div id="lines"></div>
+      <div class="seg" id="how"><button class="on" data-h="pick"><b>Vyzdvihnem</b><span>zadarmo · do 20 min</span></button><button data-h="del"><b>Doniesť</b><span>+1,50 € · do 40 min</span></button></div>
+      <div class="fields"><div>Jana Nováková <span>ukážka</span></div><div>+421 905 123 456 <span>platba pri prevzatí</span></div></div>
+      <div class="tot"><span>Spolu</span><b id="oTot">0,00 €</b></div>
+      <button class="send" id="send">Odoslať objednávku <span class="tag">ukážka</span></button>
+      <p class="fine">Objednávka ide priamo do kuchyne reštaurácie, so všetkými zmenami.</p>
+    </div>
+    <div id="pDone" class="done" hidden>
+      <div class="ph"><p class="k" style="color:#5a5148;margin:0">Objednávka #<span id="dNo">0417</span></p><button class="x" id="close2" aria-label="Zavrieť"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>
+      <div class="big">Prijaté</div>
+      <p>Kuchyňa práve dostala tento lístok, presne poskladaný:</p>
+      <div class="ticket" id="ticket"></div>
+      <p id="dEta"></p>
+      <p style="color:#5a5148">Nabudúce ťa tu čaká <b style="color:#15120f">ako minule</b>.</p>
+      <button class="send" id="again" style="margin-top:14px">Späť na menu</button>
+    </div>
+  </div>
+</div>
+<button class="skip" id="skip">Preskočiť</button>
+
+<script>
+const $ = (s, r = document) => r.querySelector(s), $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const Z = () => parseFloat(document.documentElement.style.zoom) || 1;
+const NF = new Intl.NumberFormat('sk-SK', { style: 'currency', currency: 'EUR' });
+const eur = (c) => NF.format(c / 100);
+const isDesk = () => innerWidth / Z() >= 1000;
+const store = { get(k, d) { try { const v = localStorage.getItem(k); return v ? JSON.parse(v) : d; } catch (e) { return d; } }, set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} } };
+
+/* Layer geometry in source pixels of each photo: seat = from the layer's top down to where the next layer rests,
+   sole = from its bottom up to its own contact line. s scales the photo, sy squashes it (flat pieces shot from higher up). */
+const IM = { 'bun-top': [990, 397], lettuce: [1074, 296], tomato: [918, 249], onion: [775, 179], pickles: [838, 162], bacon: [1044, 236], cheese: [936, 302], patty: [913, 493], 'bun-bottom': [970, 565], jalapeno: [876, 407], egg: [879, 410], 'l-dough': [1310, 499], 'l-garlic': [1131, 359], 'l-cream': [1231, 418], 'l-cheese': [1264, 460], 'l-bacon': [1073, 399], 'p-base': [1304, 512], 'p-mozzarella': [1127, 328], 'p-ham': [1127, 296], 'p-salami': [1165, 297], 'p-mushrooms': [1129, 265], 'p-basil': [1129, 306] };
+const DAYX = { jalapeno: { n: 'Jalapeño', p: 60, img: 'jalapeno', seat: 150, sole: 204, note: 'čerstvé, pálivé' }, egg: { n: 'Volské oko', p: 120, img: 'egg', seat: 150, sole: 205, note: 'tekutý žĺtok' } };
+const WEEK = ['egg', 'egg', 'jalapeno', 'egg', 'jalapeno', 'egg', 'jalapeno']; // by getDay(): Ne Po Ut St Št Pi So
+const DN = ['Ne', 'Po', 'Ut', 'St', 'Št', 'Pi', 'So'];
+const D = {
+  burger: { name: 'Hovädzí burger', tab: 'Burger', word: 'BURGER', price: 990, acc: '#ffb000', unit: 1000, G: 150, your: 'Tvoj burger',
+    desc: 'Hovädzie 150 g, čedar, slanina a zelenina v briošovej žemli.', line: '9 vrstiev · 4 veci navyše',
+    layers: [
+      { k: 'bunb', img: 'bun-bottom', n: 'Spodná žemľa', fixed: 1, seat: 300, sole: 0 },
+      { k: 'patty', img: 'patty', n: 'Hovädzie', w150: 1, fixed: 1, seat: 120, sole: 150 },
+      { k: 'cheese', img: 'cheese', n: 'Čedar', on: 1, bez: 'bez čedaru', seat: 95, sole: 175 },
+      { k: 'bacon', img: 'bacon', n: 'Slanina', on: 1, bez: 'bez slaniny', seat: 85, sole: 120 },
+      { k: 'pickles', img: 'pickles', n: 'Uhorky', on: 1, bez: 'bez uhoriek', seat: 55, sole: 82 },
+      { k: 'onion', img: 'onion', n: 'Cibuľa', on: 1, bez: 'bez cibule', seat: 60, sole: 95 },
+      { k: 'tomato', img: 'tomato', n: 'Paradajka', on: 1, bez: 'bez paradajky', seat: 80, sole: 120 },
+      { k: 'lettuce', img: 'lettuce', n: 'Šalát', on: 1, bez: 'bez šalátu', seat: 110, sole: 150 },
+      { k: 'bunt', img: 'bun-top', n: 'Vrchná žemľa', fixed: 1, seat: 0, sole: 120 }],
+    extras: [
+      { k: 'patty2', n: 'Dvojité mäso', sh: 'dvojité mäso', p: 340, of: 'patty', after: 'patty', dx: -10, s: 0.99, c: 14 },
+      { k: 'cheese2', n: 'Čedar navyše', sh: 'čedar navyše', p: 90, of: 'cheese', after: 'cheese', dx: 12, s: 0.98, c: 22 },
+      { k: 'bacon2', n: 'Slanina navyše', sh: 'slanina navyše', p: 120, of: 'bacon', after: 'bacon', dx: -16, s: 0.97, c: 31 }],
+    day: { jalapeno: { after: 'bacon', s: 0.95 }, egg: { after: 'bacon', s: 0.92 } },
+    last: { off: ['onion'], x: ['bacon2'] }, often: { onion: 18, pickles: 9 } },
+  langos: { name: 'Langoš', tab: 'Langoš', word: 'LANGOŠ', price: 390, acc: '#ff7a45', unit: 1310, G: 205, shade: 0.22, flat: 1, your: 'Tvoj langoš',
+    desc: 'Vyprážané cesto s cesnakom. Smotanu, syr a slaninu si pridaj.', line: 'cesnak v cene · smotana, syr, slanina',
+    layers: [
+      { k: 'dough', img: 'l-dough', n: 'Cesto', fixed: 1, seat: 215, sole: 0 },
+      { k: 'garlic', img: 'l-garlic', n: 'Cesnak', on: 1, bez: 'bez cesnaku', s: 0.8, dx: 10, seat: 175, sole: 175 },
+      { k: 'cream', img: 'l-cream', n: 'Kyslá smotana', sh: 'smotana', p: 50, s: 0.64, f: 'sepia(0.12) saturate(1.1) brightness(1.03)', dx: 10, seat: 260, sole: 150, c: 40 },
+      { k: 'cheese', img: 'l-cheese', n: 'Syr', sh: 'syr', p: 90, s: 0.8, seat: 240, sole: 215, c: 44 },
+      { k: 'bacon', img: 'l-bacon', n: 'Slanina', sh: 'slanina', p: 120, s: 0.8, dx: 10, seat: 0, sole: 200, c: 17 }],
+    extras: [],
+    day: { jalapeno: { after: 'cheese', s: 0.74, sy: 0.62 } },
+    last: { on: ['cream', 'cheese'] }, often: { garlic: 6 } },
+  pizza: { name: 'Margherita', tab: 'Pizza', word: 'PIZZA', price: 850, acc: '#7fd68f', unit: 1304, G: 165, shade: 0.28, flat: 1, your: 'Tvoja pizza',
+    desc: 'Cesto, paradajková omáčka, mozzarella a bazalka. Ostatné navrch.', line: '6 vrstiev · 5 vecí navyše',
+    layers: [
+      { k: 'base', img: 'p-base', n: 'Cesto a omáčka', fixed: 1, seat: 230, sole: 0 },
+      { k: 'mozz', img: 'p-mozzarella', n: 'Mozzarella', on: 1, bez: 'bez mozzarelly', s: 0.88, seat: 160, sole: 165 },
+      { k: 'ham', img: 'p-ham', n: 'Šunka', sh: 'šunka', p: 120, s: 0.9, seat: 150, sole: 150, c: 19 },
+      { k: 'salami', img: 'p-salami', n: 'Saláma', sh: 'saláma', p: 130, s: 0.88, seat: 150, sole: 150, c: 12 },
+      { k: 'mush', img: 'p-mushrooms', n: 'Šampiňóny', sh: 'šampiňóny', p: 90, s: 0.9, seat: 135, sole: 135, c: 15 },
+      { k: 'basil', img: 'p-basil', n: 'Bazalka', on: 1, bez: 'bez bazalky', s: 0.78, seat: 0, sole: 150 }],
+    extras: [{ k: 'mozz2', n: 'Mozzarella navyše', sh: 'mozzarella navyše', p: 110, of: 'mozz', after: 'mozz', dx: 24, s: 0.84, c: 9 }],
+    day: { jalapeno: { after: 'mush', s: 0.72, sy: 0.72 }, egg: { after: 'mush', s: 0.62, sy: 0.8 } },
+    last: { on: ['ham', 'mush'] }, often: { basil: 3 } } };
+const ORDER = ['burger', 'langos', 'pizza'];
+const now = new Date(), dayKey = (location.search.match(/day=(egg|jalapeno)/) || [])[1] || WEEK[now.getDay()], DX = DAYX[dayKey]; // ?day= previews another day's extra
+const hexR = (h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)).join(' ');
+
+/* ---------- state: one build per dish ---------- */
+const fresh = (id) => ({ on: Object.fromEntries(D[id].layers.map((L) => [L.k, !!(L.fixed || L.on)])), x: [] });
+const B = Object.fromEntries(ORDER.map((id) => [id, fresh(id)]));
+const seeded = Object.fromEntries(ORDER.map((id) => { const b = fresh(id), l = D[id].last; (l.off || []).forEach((k) => (b.on[k] = false)); (l.on || []).forEach((k) => (b.on[k] = true)); b.x = [...(l.x || [])]; return [id, b]; }));
+let LAST = store.get('pk-last', null); const lastIsSeed = !LAST; LAST = LAST || seeded;
+let cur = 'burger', mode = 'as', busy = false, snd = store.get('pk-snd', true), cart = [], how = 'pick';
+const dayOk = (id) => !!D[id].day[dayKey];
+const extrasOf = (id) => [...D[id].extras, ...(dayOk(id) ? [{ k: 'day', n: DX.n, sh: DX.n.toLowerCase(), p: DX.p, day: 1, c: 11, ...D[id].day[dayKey] }] : [])];
+
+function stack(id, md) { // bottom → top instances on the dish; the exploded view keeps an empty slot for every layer that is off
+  const d = D[id], b = B[id], ex = extrasOf(id), out = [];
+  const inst = (L, key, over = {}) => { const src = L.img ? L : {}; const g = { ...src, ...over }; const im = IM[g.img]; return { id: id + ':' + key, key, img: g.img, w: im[0], h: im[1], seat: g.seat, sole: g.sole, s: g.s || 1, sy: g.sy || 1, dx: g.dx || 0, f: g.f || '' }; };
+  for (const L of d.layers) {
+    if (b.on[L.k]) out.push(inst(L, L.k)); else if (md === 'ex') out.push({ ...inst(L, L.k), ghost: 1 });
+    for (const k of b.x) { const e = ex.find((e) => e.k === k); if (!e || e.after !== L.k) continue;
+      if (e.day) out.push(inst({ img: DX.img, seat: DX.seat, sole: DX.sole }, 'day', { s: e.s, sy: e.sy || 1 }));
+      else { const P = d.layers.find((l) => l.k === e.of); out.push(inst(P, k, { dx: e.dx, s: (P.s || 1) * (e.s / (P.s || 1)) })); } }
+  }
+  return out;
+}
+function priceOf(id, b = B[id]) { const d = D[id]; let p = d.price; d.layers.forEach((L) => { if (L.p && b.on[L.k]) p += L.p; }); b.x.forEach((k) => { const e = extrasOf(id).find((e) => e.k === k); if (e) p += e.p; }); return p; }
+function changes(id, b = B[id]) { const d = D[id], out = [];
+  d.layers.forEach((L) => { if (L.fixed) return; if (!L.p && !b.on[L.k]) out.push({ t: L.bez, m: 1 }); if (L.p && b.on[L.k]) out.push({ t: '+ ' + L.sh, p: L.p }); });
+  b.x.forEach((k) => { const e = extrasOf(id).find((e) => e.k === k); if (e) out.push({ t: '+ ' + e.sh, p: e.p }); });
+  return out; }
+const descOf = (id, b) => changes(id, b).map((c) => c.t).join(', ');
+const same = (a, b) => JSON.stringify(a.on) === JSON.stringify(b.on) && [...a.x].sort().join() === [...b.x].sort().join();
+
+/* ---------- sound: synthesised after a tap ---------- */
+let ac = null; const A = () => ac || (ac = new (window.AudioContext || window.webkitAudioContext)());
+function noise(len) { const b = A().createBuffer(1, A().sampleRate * len, A().sampleRate), d = b.getChannelData(0); for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1; return b; }
+let lastThud = 0;
+function thud(w = 1) { if (!snd || !ac) return; const t = A().currentTime; if (t - lastThud < 0.06) return; lastThud = t;
+  const o = A().createOscillator(), g = A().createGain(); o.type = 'sine'; o.frequency.setValueAtTime(120 * (0.8 + 0.2 / w), t); o.frequency.exponentialRampToValueAtTime(48, t + 0.16); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.5 * w, t + 0.008); g.gain.exponentialRampToValueAtTime(0.0001, t + 0.24); o.connect(g).connect(A().destination); o.start(t); o.stop(t + 0.26);
+  const s = A().createBufferSource(), f = A().createBiquadFilter(), g2 = A().createGain(); s.buffer = noise(0.06); f.type = 'lowpass'; f.frequency.value = 900; g2.gain.setValueAtTime(0.16 * w, t); g2.gain.exponentialRampToValueAtTime(0.0001, t + 0.06); s.connect(f).connect(g2).connect(A().destination); s.start(t); }
+function whoosh(up = 1, d = 0.45) { if (!snd || !ac) return; const t = A().currentTime, s = A().createBufferSource(), f = A().createBiquadFilter(), g = A().createGain(); s.buffer = noise(d); f.type = 'bandpass'; f.Q.value = 1.2;
+  f.frequency.setValueAtTime(up ? 400 : 2600, t); f.frequency.exponentialRampToValueAtTime(up ? 2600 : 380, t + d); g.gain.setValueAtTime(0.0001, t); g.gain.linearRampToValueAtTime(0.11, t + d * 0.4); g.gain.linearRampToValueAtTime(0.0001, t + d); s.connect(f).connect(g).connect(A().destination); s.start(t); }
+function tick(f1 = 880, f2 = 1320) { if (!snd || !ac) return; const t = A().currentTime; [f1, f2].forEach((f, k) => { const o = A().createOscillator(), g = A().createGain(); o.type = 'triangle'; o.frequency.value = f; g.gain.setValueAtTime(0.0001, t + k * 0.07); g.gain.exponentialRampToValueAtTime(0.09, t + k * 0.07 + 0.01); g.gain.exponentialRampToValueAtTime(0.0001, t + k * 0.07 + 0.3); o.connect(g).connect(A().destination); o.start(t + k * 0.07); o.stop(t + k * 0.07 + 0.32); }); }
+addEventListener('pointerdown', () => { if (!ac) try { A(); } catch (e) {} if (ac && ac.state === 'suspended') ac.resume(); }, { capture: true });
+
+/* ---------- layout ---------- */
+const stage = $('#stage'), dishEl = $('#dish'), labelsEl = $('#labels'), leadEl = $('#lead');
+const els = new Map(); // instance id → element
+function box(md) { const W = stage.clientWidth, H = stage.clientHeight, desk = isDesk();
+  if (desk) return md === 'ex' ? { x0: W / 2 - Math.min(190, W * 0.24), x1: W / 2 + Math.min(190, W * 0.24), y0: 30, y1: H - 26 } : { x0: W / 2 - Math.min(270, W * 0.36), x1: W / 2 + Math.min(270, W * 0.36), y0: H * 0.14, y1: H * 0.86 };
+  return md === 'ex' ? { x0: 8, x1: W * 0.6, y0: 12, y1: H - 40 } : { x0: W / 2 - Math.min(W * 0.43, 190), x1: W / 2 + Math.min(W * 0.43, 190), y0: 66, y1: H - 50 }; }
+function geo(id, md) { const d = D[id], st = stack(id, md), P = [];
+  st.forEach((L, i) => { const sx = L.s, sy = L.s * L.sy, h = L.h * sy; let y = 0; if (i) { const lo = P[i - 1]; y = lo.y + lo.seat - (h - L.sole * sy); }
+    P.push({ ...L, x: (d.unit - L.w * sx) / 2 + L.dx, y, W: L.w * sx, H: h, seat: L.seat * sy }); });
+  if (md === 'ex') { const b0 = box('ex'), mnX = Math.min(...P.map((p) => p.x)), mxX = Math.max(...P.map((p) => p.x + p.W)), mnY = Math.min(...P.map((p) => p.y)), mxY = Math.max(...P.map((p) => p.y + p.H));
+    const scW = Math.min((b0.x1 - b0.x0) / (mxX - mnX), 0.5), room = (b0.y1 - b0.y0) / scW - (mxY - mnY), n = Math.max(P.length - 1, 1);
+    const gap = Math.max(d.G * 0.6, Math.min(d.G * (P.length < 8 ? 3 : 1.7), room / n)); P.forEach((p, i) => (p.y -= gap * i)); }
+  const minX = Math.min(...P.map((p) => p.x)), maxX = Math.max(...P.map((p) => p.x + p.W)), minY = Math.min(...P.map((p) => p.y)), maxY = Math.max(...P.map((p) => p.y + p.H));
+  const b = box(md), sc = Math.min((b.x1 - b.x0) / (maxX - minX), (b.y1 - b.y0) / (maxY - minY), md === 'as' ? 0.62 : 0.5);
+  const ox = (b.x0 + b.x1) / 2 - ((minX + maxX) / 2) * sc, oy = (b.y0 + b.y1) / 2 - ((minY + maxY) / 2) * sc;
+  P.forEach((p) => { p.px = ox + p.x * sc; p.py = oy + p.y * sc; p.sc = sc; });
+  return { P, sc, bottom: oy + maxY * sc, cx: ox + (d.unit / 2) * sc, w: d.unit * sc }; }
+let BASE = 0.4;
+function ensure(p, z) { let el = els.get(p.id);
+  if (!el) { el = document.createElement('div'); el.className = 'ly'; el.dataset.id = p.id; el.dataset.key = p.key;
+    const src = `poskladaj/${p.img}.webp`; el.innerHTML = `<div class="fl"><img class="sh${D[cur].flat ? ' flat' : ''}" alt="" src="${src}" decoding="async"><img class="im" alt="" src="${src}" decoding="async" style="${p.f ? 'filter:' + p.f : ''}"><i class="gl" style="-webkit-mask-image:url(${src});mask-image:url(${src})"></i><button class="hit" aria-label="${(D[cur].layers.find((l) => l.k === p.key) || extrasOf(cur).find((e) => e.k === p.key) || { n: 'Vrstva' }).n}"></button></div>`;
+    el.querySelector('.hit').addEventListener('click', () => tapLayer(p.key)); retry(el); dishEl.appendChild(el); els.set(p.id, el); el._new = true; }
+  el.style.width = p.W * BASE + 'px'; el.style.height = p.H * BASE + 'px'; el.style.zIndex = z; el._p = p; return el; }
+
+function retry(root) { $$('img', root).forEach((im) => { let n = 0; im.addEventListener('error', () => { if (n++ < 4) setTimeout(() => (im.src = im.src.split('?')[0] + '?r=' + n), 250 * n); }); }); }
+let G = null; // current geometry
+function place(md, opt = {}) { // compute the layout for mode md, create elements; returns { G, entering, leaving }
+  const g = geo(cur, md); const gOther = geo(cur, md === 'ex' ? 'as' : 'ex'); BASE = Math.max(g.sc, gOther.sc);
+  const ids = new Set(g.P.filter((p) => !p.ghost).map((p) => p.id)); const entering = [], leaving = [];
+  g.P.forEach((p, i) => { if (p.ghost) return; const el = ensure(p, i + 1); if (el._new) { entering.push(el); el._new = false; } });
+  els.forEach((el, id) => { if (!ids.has(id)) leaving.push(el); });
+  G = g; return { g, entering, leaving };
+}
+const T = (p) => ({ x: p.px, y: p.py, scale: p.sc / BASE });
+function snap() { const { g, leaving } = place(mode); leaving.forEach((el) => { el.remove(); els.delete(el.dataset.id); }); g.P.forEach((p) => { const el = els.get(p.id); if (el) gsap.set(el, { ...T(p), rotation: 0, opacity: 1 }); }); shadows(mode, 0); floor(0); labels(0); float(); }
+
+function shadows(md, d = 0.5) { const k = D[cur].shade ?? 0.62; els.forEach((el, id) => { if (!id.startsWith(cur)) return; gsap.to(el.querySelector('.sh'), { opacity: md === 'as' && !el.dataset.key.match(/^(bunb|dough|base)$/) ? k : 0, duration: d }); }); }
+function floor(d = 0.6) { if (!G) return; const w = G.w * 0.9, h = Math.max(24, G.w * 0.16); gsap.to('#floor', { x: G.cx - w / 2, y: G.bottom - h * 0.55, width: w, height: h, opacity: mode === 'as' ? 1 : 0.55, duration: d, ease: 'power2.out' }); }
+function float() { els.forEach((el) => { const f = el.querySelector('.fl'); gsap.killTweensOf(f); if (mode === 'ex' && !reduce) { gsap.set(f, { y: 0, rotation: 0 }); gsap.to(f, { y: gsap.utils.random(-4, 4), rotation: gsap.utils.random(-0.8, 0.8), duration: gsap.utils.random(2.2, 3.4), ease: 'sine.inOut', yoyo: true, repeat: -1, delay: gsap.utils.random(0, 0.6) }); } else gsap.to(f, { y: 0, rotation: 0, scaleX: 1, scaleY: 1, duration: 0.25 }); }); }
+
+/* ---------- labels and leader lines (exploded view only) ---------- */
+function labelItems() { const d = D[cur], b = B[cur], ex = extrasOf(cur), P = G.P, items = []; let idx = 0;
+  const anchorOf = (p) => ({ ax: p.px + p.W * p.sc * 0.86, axl: p.px + p.W * p.sc * 0.14, ay: p.py + p.H * p.sc * 0.42 });
+  d.layers.forEach((L, li) => { const p = P.find((p) => p.key === L.k);
+    if (p && !p.ghost) items.push({ key: L.k, ...anchorOf(p), cls: L.fixed ? 'fixed' : '', nm: L.n, dt: L.fixed ? (L.w150 ? 'základ · 150\u00a0g' : 'základ') : L.p ? '+ ' + eur(L.p) : 'v cene' });
+    if (p && p.ghost) items.push({ key: L.k, ...anchorOf(p), ay: p.py + p.H * p.sc * 0.5, cls: L.p ? 'ghost' : 'off', nm: L.n, dt: L.p ? 'pridať · ' + eur(L.p) : L.bez, slot: 1, ring: { cx: p.px + p.W * p.sc * 0.5, cy: p.py + p.H * p.sc * 0.5, rx: p.W * p.sc * 0.4, ry: Math.max(8, p.H * p.sc * 0.22) } });
+    b.x.forEach((k) => { const e = ex.find((e) => e.k === k); if (!e || e.after !== L.k) return; const q = P.find((p) => p.key === (e.day ? 'day' : k)); if (q) items.push({ key: k, ...anchorOf(q), cls: 'ext', nm: e.n, dt: '+ ' + eur(e.p) }); });
+  });
+  items.sort((a, b) => a.ay - b.ay); items.forEach((it) => (it.ix = String(++idx).padStart(2, '0'))); return items; }
+function relax(list, top, bot, pitch) { // labels follow their layers but keep a tap-sized pitch inside the stage
+  list.forEach((a, i) => { a.ly = Math.max(a.ay, i ? list[i - 1].ly + pitch : top); });
+  for (let i = list.length - 1; i >= 0; i--) list[i].ly = Math.min(list[i].ly, i < list.length - 1 ? list[i + 1].ly - pitch : bot);
+  list.forEach((a, i) => { a.ly = Math.max(a.ly, i ? list[i - 1].ly + pitch : top); }); }
+function labels(d = 0.5) {
+  const W = stage.clientWidth, H = stage.clientHeight, desk = isDesk(), show = mode === 'ex';
+  if (!show) { gsap.to('.lb', { autoAlpha: 0, duration: d * 0.6, onComplete: () => { if (mode !== 'ex') labelsEl.innerHTML = ''; } }); gsap.to(leadEl, { opacity: 0, duration: d * 0.6, onComplete: () => { if (mode !== 'ex') leadEl.innerHTML = ''; } }); sumBar(); return; }
+  sumBar(); const items = labelItems();
+  if (desk) { const R = [], L = []; items.forEach((x, i) => (i % 2 ? L : R).push(x)); relax(R, 30, H - 30, 54); relax(L, 30, H - 30, 54);
+    const xr = G.cx + G.w * 0.5 + 34, xl = G.cx - G.w * 0.5 - 34; R.forEach((x) => { x.side = 'r'; x.lx = xr; }); L.forEach((x) => { x.side = 'l'; x.lx = xl; x.dt = x.dt.replace('pridať · ', '+ '); }); }
+  else { const pitch = Math.min(46, Math.max(40, (H - 20) / Math.max(1, items.length))); relax(items, 10 + pitch / 2, H - 6 - pitch / 2, pitch); items.forEach((x) => { x.side = 'r'; x.lx = W * 0.6 + 16; }); }
+  // labels
+  const keep = new Set(); const lw = desk ? 190 : W - (W * 0.6 + 16) - 4;
+  items.forEach((x, n) => { keep.add(x.key); let el = labelsEl.querySelector(`[data-k="${x.key}"]`); const fresh = !el;
+    if (!el) { el = document.createElement('button'); el.className = 'lb'; el.dataset.k = x.key; el.addEventListener('click', () => tapLayer(x.key)); labelsEl.appendChild(el); }
+    el.className = 'lb ' + x.cls + (x.side === 'l' ? ' left' : ''); el.innerHTML = `<span class="ix">${x.ix}</span><span class="tx"><span class="nm">${x.nm}</span><span class="dt">${x.dt}</span></span>`;
+    el.setAttribute('aria-label', x.nm + ', ' + x.dt); const left = x.side === 'l' ? Math.max(4, x.lx - lw) : x.lx - 6; const wd = x.side === 'l' ? x.lx - left : Math.min(lw, W - 4 - left); el.style.width = wd + 'px'; const top = x.ly - 22;
+    if (fresh || el._hidden) { gsap.set(el, { x: left, y: top }); gsap.fromTo(el, { autoAlpha: 0, clipPath: x.side === 'l' ? 'inset(0% 0% 0% 100%)' : 'inset(0% 100% 0% 0%)' }, { autoAlpha: 1, clipPath: 'inset(0% 0% 0% 0%)', duration: 0.5, delay: d ? 0.25 + n * 0.035 : 0, ease: 'power3.out' }); el._hidden = false; }
+    else gsap.to(el, { x: left, y: top, autoAlpha: 1, duration: d, ease: 'power3.out' }); });
+  $$('.lb', labelsEl).forEach((el) => { if (!keep.has(el.dataset.k)) gsap.to(el, { autoAlpha: 0, duration: 0.25, onComplete: () => el.remove() }); });
+  // leader lines
+  const path = (x) => { const r = x.side !== 'l', ax = r ? x.ax : x.axl, ex = r ? x.lx - 10 : x.lx + 10, kx = r ? Math.max(ax + 12, ex - 26) : Math.min(ax - 12, ex + 26); return `M${ax.toFixed(1)} ${x.ay.toFixed(1)} L${kx.toFixed(1)} ${x.ay.toFixed(1)} L${(r ? ex - 6 : ex + 6).toFixed(1)} ${x.ly.toFixed(1)} L${ex.toFixed(1)} ${x.ly.toFixed(1)}`; };
+  leadEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+  leadEl.innerHTML = items.map((x) => `<g class="${x.slot ? 'ghost' : ''}" data-k="${x.key}">${x.ring ? `<ellipse class="slot" cx="${x.ring.cx.toFixed(1)}" cy="${x.ring.cy.toFixed(1)}" rx="${x.ring.rx.toFixed(1)}" ry="${x.ring.ry.toFixed(1)}"/>` : ''}<path d="${path(x)}" pathLength="1"/><circle class="o" cx="${(x.side === 'l' ? x.axl : x.ax).toFixed(1)}" cy="${x.ay.toFixed(1)}" r="7"/><circle cx="${(x.side === 'l' ? x.axl : x.ax).toFixed(1)}" cy="${x.ay.toFixed(1)}" r="3"/></g>`).join('');
+  gsap.set(leadEl, { opacity: 1 });
+  if (d) { gsap.fromTo($$('path', leadEl), { strokeDasharray: '1 1', strokeDashoffset: 1 }, { strokeDashoffset: 0, duration: 0.6, delay: 0.2, stagger: 0.03, ease: 'power2.out', onComplete() { this.targets().forEach((p) => p.closest('.ghost') ? (p.style.strokeDasharray = '3 4') : (p.style.strokeDasharray = 'none')); } }); gsap.from($$('circle', leadEl), { scale: 0, transformOrigin: '50% 50%', duration: 0.4, delay: 0.25, stagger: 0.03, ease: 'back.out(3)' }); }
+  else $$('path', leadEl).forEach((p) => (p.style.strokeDasharray = p.closest('.ghost') ? '3 4' : 'none'));
+}
+function hideLabelsNow() { $$('.lb', labelsEl).forEach((el) => { el._hidden = true; }); }
+
+/* ---------- moves ---------- */
+function relayout(opt = {}) { // animate every layer to the current mode's layout
+  const { g, entering, leaving } = place(mode); const d = opt.d ?? 0.6;
+  g.P.forEach((p, i) => { const el = els.get(p.id); if (!el || entering.includes(el)) return; gsap.to(el, { ...T(p), duration: d, ease: opt.ease || 'power3.out', delay: (opt.stagger || 0) * (opt.fromTop ? g.P.length - 1 - i : i), overwrite: 'auto' }); });
+  return { g, entering, leaving }; }
+function dropIn(el, p, delay = 0, w = 0.8) { const H = stage.clientHeight; gsap.set(el, { ...T(p), y: p.py - H * 0.75, rotation: gsap.utils.random(-7, 7), opacity: 1 });
+  const f = el.querySelector('.fl'); gsap.to(el, { y: p.py, rotation: 0, duration: 0.55, delay, ease: 'power2.in', onComplete: () => { thud(w); gsap.fromTo(f, { scaleY: 0.9, scaleX: 1.04 }, { scaleY: 1, scaleX: 1, duration: 0.5, ease: 'elastic.out(1, 0.45)' }); if (mode === 'ex') float(); } }); }
+function flyOut(el) { whoosh(0, 0.4); gsap.to(el, { x: '+=' + stage.clientWidth * 0.9, y: '-=' + 40, rotation: 22, opacity: 0, duration: 0.5, ease: 'power2.in', onComplete: () => { el.remove(); els.delete(el.dataset.id); } }); }
+function change(fn) { if (busy) return; const before = priceOf(cur); fn(); const { entering, leaving } = relayout({ d: 0.55, ease: 'back.out(1.2)' }); leaving.forEach(flyOut);
+  entering.forEach((el, n) => dropIn(el, el._p, 0.12 + n * 0.1, 0.9)); if (!entering.length && leaving.length && mode === 'as') gsap.delayedCall(0.45, () => thud(0.6));
+  shadows(mode, 0.4); setTimeout(() => { labels(0.45); floor(0.5); }, 30); priceUI(before); ui(); }
+function tapLayer(k) { if (mode === 'as') return setMode('ex'); const d = D[cur], L = d.layers.find((l) => l.k === k), b = B[cur];
+  if (L && L.fixed) { const el = [...els.values()].find((e) => e.dataset.key === k); if (el) gsap.fromTo(el.querySelector('.fl'), { x: -6 }, { x: 0, duration: 0.5, ease: 'elastic.out(1.2, 0.3)' }); toast(k.startsWith('bun') || k === 'dough' || k === 'base' ? 'Toto je základ, bez neho to nepôjde.' : 'Mäso je základ. Môžeš si dať dvojité.'); return; }
+  if (L) change(() => (b.on[k] = !b.on[k])); else change(() => (b.x = b.x.filter((x) => x !== k))); }
+function toggleX(k) { const L = D[cur].layers.find((l) => l.k === k); if (L) return tapLayer(k); const b = B[cur]; change(() => (b.x.includes(k) ? (b.x = b.x.filter((x) => x !== k)) : b.x.push(k))); }
+function setMode(md, quick) { if (busy || md === mode) return; mode = md; const ex = md === 'ex';
+  if (ex) { whoosh(1, 0.6); hideLabelsNow(); const { g } = relayout({ d: 1.0, ease: 'expo.out', stagger: 0.035, fromTop: true }); els.forEach((el) => gsap.to(el, { rotation: gsap.utils.random(-1.6, 1.6), duration: 1 })); gsap.delayedCall(0.2, float); shadows('ex', 0.3); floor(0.9); labels(0.6); }
+  else { els.forEach((el) => gsap.killTweensOf(el.querySelector('.fl'))); float(); labels(0.3); const { g } = place('as');
+    g.P.forEach((p, i) => { const el = els.get(p.id); if (!el) return; gsap.to(el, { ...T(p), rotation: 0, duration: 0.5, delay: i * 0.045, ease: 'power3.in', overwrite: 'auto', onComplete: () => { if (i % 2 === 0 || i === g.P.length - 1) thud(i === g.P.length - 1 ? 1 : 0.55); gsap.fromTo(el.querySelector('.fl'), { scaleY: 0.94 }, { scaleY: 1, duration: 0.45, ease: 'elastic.out(1, 0.4)' }); } }); });
+    gsap.delayedCall(0.5 + g.P.length * 0.045, () => { glint(); }); shadows('as', 0.8); floor(0.7); }
+  ui(); }
+function glint() { const top = [...els.values()].sort((a, b) => b.style.zIndex - a.style.zIndex)[0]; if (!top) return; const gl = top.querySelector('.gl'); gsap.fromTo(gl, { opacity: 1, backgroundPosition: '160% 0' }, { backgroundPosition: '-60% 0', duration: 1.1, ease: 'power2.inOut', onComplete: () => gsap.set(gl, { opacity: 0 }) }); }
+
+/* ---------- dish switch ---------- */
+function switchDish(id, opt = {}) { if (id === cur && !opt.force) return; if (busy) return; const old = [...els.values()]; els.clear();
+  old.forEach((el, i) => gsap.to(el, { y: '+=' + stage.clientHeight * 0.5, opacity: 0, rotation: gsap.utils.random(-6, 6), duration: 0.42, delay: i * 0.02, ease: 'power2.in', onComplete: () => el.remove() }));
+  labelsEl.innerHTML = ''; leadEl.innerHTML = '';
+  cur = id; accent(); word(); const { g, entering } = place(mode); shadows(mode, 0);
+  entering.forEach((el, i) => { const p = el._p; gsap.set(el, { ...T(p), y: p.py - stage.clientHeight * 0.8, rotation: gsap.utils.random(-8, 8), opacity: 1 });
+    gsap.to(el, { y: p.py, rotation: mode === 'ex' ? gsap.utils.random(-1.4, 1.4) : 0, duration: 0.6, delay: 0.25 + i * 0.07, ease: mode === 'ex' ? 'back.out(1.1)' : 'power2.in', onComplete: () => { if (mode === 'as') { thud(i === entering.length - 1 ? 1 : 0.5); gsap.fromTo(el.querySelector('.fl'), { scaleY: 0.92 }, { scaleY: 1, duration: 0.45, ease: 'elastic.out(1,0.4)' }); } } }); });
+  gsap.delayedCall(0.3 + entering.length * 0.07, () => { float(); labels(0.5); if (mode === 'as') { glint(); shadows('as', 0.5); } });
+  floor(0.8); ui(); priceUI(priceOf(id)); }
+
+/* ---------- accent, word, UI ---------- */
+function accent() { const a = D[cur].acc; document.documentElement.style.setProperty('--acc', a); document.documentElement.style.setProperty('--accR', hexR(a)); }
+function fitWord() { const w = $('#word'); w.style.fontSize = ''; const f = parseFloat(getComputedStyle(w).fontSize), sw = w.scrollWidth, W = stage.clientWidth; if (sw > W * 0.96) w.style.fontSize = (f * W * 0.94 / sw).toFixed(1) + 'px'; }
+function word() { const w = $('#word'); w.innerHTML = [...D[cur].word].map((c) => `<i>${c}</i>`).join(''); fitWord(); if (!reduce) gsap.from($$('i', w), { yPercent: 40, opacity: 0, duration: 0.8, stagger: 0.04, ease: 'power3.out', clearProps: 'all' }); }
+let shownPrice = 990;
+function priceUI(from) { const to = priceOf(cur), o = { v: from ?? shownPrice }; shownPrice = to; const set = (v) => { const s = eur(Math.round(v / 10) * 10); $('#addP').textContent = s; $('#add2P').textContent = s; $('#sTot').textContent = s; };
+  gsap.to(o, { v: to, duration: 0.5, ease: 'power2.out', onUpdate: () => set(o.v), onComplete: () => set(to) }); if (to !== from && from != null) gsap.fromTo(['#addP', '#sTot'], { y: to > from ? 6 : -6, opacity: 0.4 }, { y: 0, opacity: 1, duration: 0.35, ease: 'power2.out' }); }
+function sumBar() { const s = $('#sum'); if (mode === 'ex') { s.innerHTML = '<span class="hint">Ťukni na vrstvu: uber ju alebo vráť</span>'; return; } const ch = changes(cur); s.innerHTML = ch.length ? ch.map((c) => `<span class="${c.m ? 'minus' : 'plus'}">${c.t}</span>`).join('') : '<span>presne podľa receptu</span>'; }
+function ui() {
+  $$('#tabs button').forEach((b) => b.classList.toggle('on', b.dataset.d === cur)); $$('#dl button').forEach((b) => b.classList.toggle('on', b.dataset.d === cur));
+  $('#mode span').textContent = mode === 'ex' ? 'Poskladať' : 'Rozložiť';
+  // chips: ako minule, then everything that can be added
+  const b = B[cur], d = D[cur], ex = extrasOf(cur), last = LAST[cur], isSame = same(b, last);
+  const opt = [...d.layers.filter((L) => L.p).map((L) => ({ k: L.k, n: L.n, p: L.p, on: b.on[L.k], c: L.c })), ...ex.map((e) => ({ k: e.k, n: e.n, p: e.p, on: b.x.includes(e.k), day: e.day, c: e.c }))];
+  $('#chips').innerHTML = `<button class="chip${isSame ? ' on' : ''}" data-a="last"><span class="pl">↺</span>Ako minule</button>` + opt.map((o) => `<button class="chip${o.on ? ' on' : ''}${o.day ? ' day' : ''}" data-x="${o.k}" aria-pressed="${o.on}"><span class="pl">${o.on ? '✓' : '+'}</span>${o.day ? '<span class="d">Dnes</span>' : ''}${o.n}<span class="p">${eur(o.p)}</span></button>`).join('');
+  $('#xlist').innerHTML = opt.map((o) => `<button class="xr${o.on ? ' on' : ''}${o.day ? ' day' : ''}" data-x="${o.k}" aria-pressed="${o.on}"><span class="t"><b>${o.n}</b><span>${o.day ? 'dnes navyše · ' + DX.note : 'dnes ' + (o.c + (live[cur + o.k] || 0)) + '×'}</span></span><span class="p">+ ${eur(o.p)}</span><span class="pl">${o.on ? '✓' : '+'}</span></button>`).join('');
+  // pill: ako minule on the assembled dish
+  const pill = $('#pill'), ld = descOf(cur, last) || 'presne podľa receptu'; pill.hidden = mode !== 'as';
+  pill.classList.toggle('same', isSame); pill.innerHTML = `<span class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">${isSame ? '<path d="M5 12.5l4.5 4.5L19 7.5"/>' : '<path d="M4 12a8 8 0 1 0 2.4-5.7"/><path d="M4 4v4.5h4.5"/>'}</svg></span><b>${isSame ? 'Ako minule' : 'Ako minule?'}</b><span>${ld}${lastIsSeed ? ' · ukážka' : ''}</span>`;
+  // right sheet
+  $('#sK').textContent = d.your; $('#sName').textContent = d.name; $('#sDesc').textContent = d.desc;
+  $('#sRows').innerHTML = `<div><span>${d.name}</span><span>${eur(d.price)}</span></div>` + changes(cur).map((c) => `<div class="${c.m ? 'minus' : 'plus'}"><span>${c.t}</span><span>${c.m ? eur(0) : eur(c.p)}</span></div>`).join('');
+  // left cards
+  $('#againCard').innerHTML = `<p class="k">Ako minule ${lastIsSeed ? '<span class="tag">ukážka</span>' : ''}</p><div class="row"><p>${d.your}<br><span>${ld}</span></p><button class="btn" data-a="last">${isSame ? '✓ Je tam' : 'Poskladať'}</button></div>`;
+  $('#dayCard').innerHTML = `<p class="k">Dnes navyše · ${DN[now.getDay()]}</p><p>${DX.n} <span>· ${DX.note} · ${eur(DX.p)}${dayOk(cur) ? '' : ' · dnes len na burger a pizzu'}</span></p><div class="week">${[1, 2, 3, 4, 5, 6, 0].map((i) => `<span class="${i === now.getDay() ? 'on' : ''}"><b>${DN[i]}</b><i class="dot ${WEEK[i]}"></i></span>`).join('')}</div><p class="wk"><i class="dot egg"></i> volské oko · <i class="dot jalapeno"></i> jalapeño · mení sa samo</p>`;
+  $('#snd').classList.toggle('on', snd); $('#snd').setAttribute('aria-pressed', snd); $('#snd').setAttribute('aria-label', snd ? 'Zvuk zapnutý' : 'Zvuk vypnutý'); $$('#snd .w1, #snd .w2').forEach((p) => (p.style.opacity = snd ? 1 : 0.15));
+}
+function applyLast() { const L = LAST[cur]; if (same(B[cur], L)) { if (mode === 'ex') setMode('as'); return; } change(() => { B[cur] = { on: { ...L.on }, x: [...L.x] }; }); if (mode === 'ex') setTimeout(() => setMode('as'), 700); }
+
+/* ---------- cart and order ---------- */
+function add() { if (busy) return; busy = true; const go = () => { const b = B[cur], line = { id: cur, b: { on: { ...b.on }, x: [...b.x] }, p: priceOf(cur), q: 1 }; const hit = cart.find((l) => l.id === line.id && same(l.b, line.b)); hit ? hit.q++ : cart.push(line);
+    const desk = isDesk(), target = desk ? $('#cartpill') : $('#cart'); const wasEmpty = cart.reduce((a, l) => a + l.q, 0) === 1; if (!desk && wasEmpty) gsap.to('#cart', { height: 58, duration: 0.35, ease: 'power3.out', onUpdate: () => {}, onComplete: () => { snap(); } });
+    const r1 = dishEl.getBoundingClientRect(), r2 = target.getBoundingClientRect(), z = Z(); const tx = (r2.left + r2.width / 2 - (r1.left + G.cx * z)) / z, ty = (r2.top + r2.height / 2 - (r1.top + (G.bottom - G.w * 0.25) * z)) / z;
+    whoosh(1, 0.35); gsap.to(dishEl, { x: tx, y: ty, scale: 0.12, opacity: 0, transformOrigin: `${G.cx}px ${G.bottom - G.w * 0.25}px`, duration: 0.6, ease: 'power2.in', onComplete: () => { tick(); cartUI(true); gsap.set(dishEl, { x: 0, y: 0, scale: 1 }); gsap.to(dishEl, { opacity: 1, duration: 0.4, delay: 0.15 }); busy = false; } }); };
+  if (mode === 'ex') { setMode('as'); setTimeout(go, 900); } else go(); }
+function cartUI(bump) { const n = cart.reduce((a, l) => a + l.q, 0), s = cart.reduce((a, l) => a + l.p * l.q, 0);
+  $('#cN').textContent = n; $('#cT').textContent = n === 1 ? '1 položka' : n < 5 ? n + ' položky' : n + ' položiek'; $('#cS').textContent = eur(s);
+  $('#cpN').textContent = n; $('#cpT').textContent = n ? eur(s) : 'Košík'; $('#cartpill').classList.toggle('full', n > 0);
+  if (!n && $('#cart').offsetHeight > 0) gsap.to('#cart', { height: 0, duration: 0.3, onComplete: snap });
+  if (bump) gsap.fromTo([isDesk() ? '#cartpill' : '#cartBtn'], { scale: 1.06 }, { scale: 1, duration: 0.5, ease: 'elastic.out(1, 0.4)' }); }
+function openSheet() { if (!cart.length) return; $('#pCart').hidden = false; $('#pDone').hidden = true; linesUI(); const sh = $('#sheet'); sh.style.visibility = 'visible'; sh.setAttribute('aria-hidden', 'false');
+  gsap.to('#scrim', { opacity: 1, duration: 0.3 }); gsap.to('#panel', isDesk() ? { x: '0%', duration: 0.5, ease: 'power3.out' } : { y: '0%', duration: 0.5, ease: 'power3.out' }); }
+function closeSheet() { gsap.to('#scrim', { opacity: 0, duration: 0.25 }); gsap.to('#panel', isDesk() ? { x: '105%', duration: 0.35, ease: 'power2.in' } : { y: '105%', duration: 0.35, ease: 'power2.in', onComplete: () => { $('#sheet').style.visibility = 'hidden'; $('#sheet').setAttribute('aria-hidden', 'true'); } }); if (isDesk()) setTimeout(() => { $('#sheet').style.visibility = 'hidden'; }, 360); }
+function linesUI() { $('#lines').innerHTML = cart.map((l, i) => `<div class="line"><b>${D[l.id].name}</b><span class="lp">${eur(l.p * l.q)}</span><span class="ds">${descOf(l.id, l.b) || 'presne podľa receptu'}</span><span class="qty"><button data-q="-1" data-i="${i}" aria-label="Menej">−</button><span>${l.q}</span><button data-q="1" data-i="${i}" aria-label="Viac">+</button></span></div>`).join('');
+  const s = cart.reduce((a, l) => a + l.p * l.q, 0) + (how === 'del' ? 150 : 0); $('#oTot').textContent = eur(s); }
+function send() { const no = String(400 + Math.floor(Math.random() * 90)).padStart(4, '0'); $('#dNo').textContent = no;
+  $('#ticket').innerHTML = `<div class="th"><span>#${no} · ${how === 'del' ? 'donáška' : 'vyzdvihne'}</span><span>${new Date().toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}</span></div>` + cart.map((l) => `<div class="it">${l.q}× ${D[l.id].name}</div>` + changes(l.id, l.b).map((c) => `<div class="md ${c.m ? 'minus' : ''}">${c.m ? '– ' + c.t.replace(/^bez /, 'BEZ ').toUpperCase() : c.t.toUpperCase()}</div>`).join('')).join('');
+  const eta = new Date(Date.now() + (how === 'del' ? 38 : 18) * 60000); $('#dEta').innerHTML = `${how === 'del' ? 'Donesieme' : 'Hotové na vyzdvihnutie'} približne o <b>${eta.toLocaleTimeString('sk-SK', { hour: '2-digit', minute: '2-digit' })}</b>.`;
+  const saved = { ...LAST }; cart.forEach((l) => (saved[l.id] = l.b)); LAST = saved; store.set('pk-last', saved);
+  gsap.to('#pCart', { opacity: 0, y: -10, duration: 0.25, onComplete: () => { $('#pCart').hidden = true; gsap.set('#pCart', { opacity: 1, y: 0 }); $('#pDone').hidden = false; gsap.from('#pDone .big', { yPercent: 60, opacity: 0, duration: 0.6, ease: 'power3.out' }); gsap.from('#ticket', { y: -30, opacity: 0, duration: 0.7, delay: 0.15, ease: 'power3.out' }); gsap.from('#ticket > div', { opacity: 0, x: -6, stagger: 0.05, delay: 0.4, duration: 0.3 }); tick(1046, 1568); } });
+  cart = []; cartUI(); ui(); }
+
+/* ---------- live: what other guests add today (sample data) ---------- */
+const live = {}; const WHO = ['Peter', 'Jana', 'Lukáš', 'Erika', 'Tomáš', 'Zsófia', 'Miro'];
+function feedUI() { const d = D[cur], rows = []; d.layers.filter((L) => L.p).forEach((L) => rows.push([L.c + (live[cur + L.k] || 0), '× ' + L.sh])); extrasOf(cur).forEach((e) => rows.push([e.c + (live[cur + e.k] || 0), '× ' + e.sh])); Object.entries(d.often || {}).forEach(([k, c]) => rows.push([c + (live[cur + k] || 0), '× ' + d.layers.find((l) => l.k === k).bez]));
+  $('#feed').innerHTML = rows.sort((a, b) => b[0] - a[0]).slice(0, 5).map((r) => `<li><b>${r[0]}</b><span>${r[1]}</span></li>`).join(''); }
+function toast(t) { const el = $('#toast'); el.textContent = t; gsap.killTweensOf(el); gsap.fromTo(el, { opacity: 0, y: -8 }, { opacity: 1, y: 0, duration: 0.3 }); gsap.to(el, { opacity: 0, duration: 0.4, delay: 2.6 }); }
+function liveTick() { if (document.hidden || busy || $('#sheet').style.visibility === 'visible') return; const id = ORDER[Math.floor(Math.random() * 3)], d = D[id], pool = [...d.layers.filter((L) => L.p).map((L) => [L.k, '+ ' + L.sh]), ...extrasOf(id).map((e) => [e.k, '+ ' + e.sh]), ...Object.keys(d.often || {}).map((k) => [k, d.layers.find((l) => l.k === k).bez])];
+  const [k, t] = pool[Math.floor(Math.random() * pool.length)]; live[id + k] = (live[id + k] || 0) + 1; feedUI(); if (id === cur) ui();
+  if (isDesk() || mode === 'ex') return; toast(`${WHO[Math.floor(Math.random() * WHO.length)]} práve: ${d.tab.toLowerCase()} ${t} · ukážka`); }
+
+/* ---------- intro: once a day the layers fall into the finished dish, then it opens up ---------- */
+let intro = null;
+function playIntro() { busy = true; mode = 'as'; const { g, entering } = place('as'); const H = stage.clientHeight; gsap.set('#skip', { autoAlpha: 1 });
+  gsap.set(stage, { '--k': 0 }); const tl = gsap.timeline({ onComplete: endIntro }); intro = tl;
+  tl.fromTo(stage, { opacity: 0 }, { opacity: 1, duration: 0.6 });
+  if (!isDesk()) { gsap.set('#introT', { visibility: 'visible' }); tl.from('#introT i', { yPercent: 110, duration: 0.7, stagger: 0.08, ease: 'power3.out' }, 0.1); }
+  else tl.from('#h1 i', { yPercent: 110, duration: 0.8, stagger: 0.1, ease: 'power3.out' }, 0.1);
+  let t = 0.5; g.P.forEach((p, i) => { const el = els.get(p.id), last = i === g.P.length - 1, d = last ? 0.95 : Math.max(0.42, 0.75 - i * 0.05);
+    gsap.set(el, { ...T(p), y: p.py - H * 0.9 - i * 30, rotation: gsap.utils.random(-10, 10), opacity: 1 });
+    tl.to(el, { y: p.py, rotation: 0, duration: d, ease: last ? 'power3.in' : 'power2.in' }, t);
+    tl.fromTo(el.querySelector('.fl'), { scaleY: 0.9, scaleX: 1.04 }, { scaleY: 1, scaleX: 1, duration: 0.5, ease: 'elastic.out(1, 0.45)' }, t + d);
+    tl.call(() => thud(last ? 1 : 0.5), null, t + d); t += last ? 0.5 : Math.max(0.16, 0.34 - i * 0.025); });
+  t += 0.55; tl.to('#floor', { opacity: 1, duration: 0.4 }, t - 0.6); tl.add(() => { shadows('as', 0.5); glint(); }, t - 0.4);
+  if (!isDesk()) tl.to('#introT i', { yPercent: -110, duration: 0.5, stagger: 0.05, ease: 'power3.in' }, t + 0.1);
+  tl.to(stage, { scale: 1.025, duration: 0.8, ease: 'sine.inOut', yoyo: true, repeat: 1 }, t - 0.5);
+  tl.add(() => { busy = false; document.body.classList.remove('lock'); gsap.to('#skip', { autoAlpha: 0, duration: 0.2 }); word(); setMode('ex'); }, t + 0.7); tl.to({}, { duration: 1.1 });
+}
+function endIntro() { intro = null; busy = false; gsap.set('#skip', { autoAlpha: 0 }); gsap.set('#introT', { visibility: 'hidden' }); document.body.classList.remove('lock'); store.set('pk-intro', now.toDateString()); }
+$('#skip').addEventListener('click', () => { if (!intro) return; intro.kill(); intro = null; gsap.set('#h1 i', { yPercent: 0 }); gsap.set(stage, { opacity: 1, scale: 1 }); mode = 'ex'; snap(); endIntro(); ui(); });
+
+/* ---------- wiring ---------- */
+$('#tabs').innerHTML = ORDER.map((id) => `<button role="tab" data-d="${id}">${D[id].tab}</button>`).join('');
+$('#dl').innerHTML = ORDER.map((id) => `<button data-d="${id}"><b>${D[id].name}</b><span>${D[id].line}</span><em>${eur(D[id].price)}</em></button>`).join('');
+document.addEventListener('click', (e) => { const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.d) switchDish(t.dataset.d); else if (t.dataset.x) toggleX(t.dataset.x); else if (t.dataset.a === 'last') applyLast(); else if (t.dataset.q) { const l = cart[+t.dataset.i]; l.q += +t.dataset.q; if (l.q <= 0) cart.splice(+t.dataset.i, 1); cartUI(); if (!cart.length) closeSheet(); else linesUI(); } else if (t.dataset.h) { how = t.dataset.h; $$('#how button').forEach((b) => b.classList.toggle('on', b === t)); linesUI(); } });
+$('#mode').addEventListener('click', () => setMode(mode === 'ex' ? 'as' : 'ex'));
+$('#add').addEventListener('click', add); $('#add2').addEventListener('click', add);
+$('#pill').addEventListener('click', applyLast);
+$('#cartBtn').addEventListener('click', openSheet); $('#cartpill').addEventListener('click', openSheet);
+$('#scrim').addEventListener('click', closeSheet); $('#close1').addEventListener('click', closeSheet); $('#close2').addEventListener('click', closeSheet); $('#again').addEventListener('click', closeSheet);
+$('#send').addEventListener('click', send);
+$('#snd').addEventListener('click', () => { snd = !snd; store.set('pk-snd', snd); ui(); if (snd) tick(660, 990); });
+// a swipe up on the stage opens the dish, a swipe down closes it (buttons do the same)
+let sy0 = null, swT = 0; stage.addEventListener('pointerdown', (e) => (sy0 = e.clientY)); stage.addEventListener('pointercancel', () => (sy0 = null));
+stage.addEventListener('pointerup', (e) => { if (sy0 == null) return; const dy = e.clientY - sy0; sy0 = null; if (Math.abs(dy) > 50) { swT = Date.now(); setMode(dy < 0 ? 'ex' : 'as'); } });
+stage.addEventListener('click', (e) => { if (Date.now() - swT < 400) { e.stopPropagation(); return; } if (mode === 'as' && !e.target.closest('button')) setMode('ex'); }, true);
+let rT; addEventListener('resize', () => { clearTimeout(rT); rT = setTimeout(() => { fitWord(); if (!intro) snap(); }, 120); });
+
+
+// boot: wait for the type and the first dish at most 2.5 s, never show an empty dark screen for longer
+accent(); word(); ui(); feedUI(); cartUI();
+const first = stack('burger').map((L) => new Promise((ok) => { const i = new Image(); i.onload = i.onerror = ok; i.src = `poskladaj/${L.img}.webp`; }));
+Promise.race([Promise.all([document.fonts.ready, ...first]), new Promise((ok) => setTimeout(ok, 2500))]).then(() => {
+  fitWord();
+  const rest = [...new Set(ORDER.flatMap((id) => D[id].layers.map((L) => L.img)).concat(['jalapeno', 'egg']))]; // the other dishes, one at a time
+  (function next() { const f = rest.shift(); if (!f) return; const i = new Image(); i.onload = i.onerror = () => setTimeout(next, 60); i.src = `poskladaj/${f}.webp`; })();
+  const seen = !/[?&]intro\b/.test(location.search) && (store.get('pk-intro', '') === now.toDateString() || /[?&]nointro/.test(location.search)); // ?intro replays the daily opening
+  if (seen || reduce) { mode = /[?&]ex/.test(location.search) ? 'ex' : 'as'; snap(); document.body.classList.remove('lock'); ui(); }
+  else playIntro();
+  setInterval(liveTick, 9000);
+});
+</script>
+
+<style>
+#a2hs { position: fixed; z-index: 9999; left: max(12px, env(safe-area-inset-left, 0px)); right: max(12px, env(safe-area-inset-right, 0px)); top: calc(env(safe-area-inset-top, 0px) + 12px); display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; padding: 14px 8px 14px 16px; border-radius: 18px; background: #f3ece3; color: #14110e; box-shadow: 0 18px 50px rgb(0 0 0 / 0.5); font: 500 15px/1.4 system-ui, -apple-system, sans-serif; }
+#a2hs[hidden] { display: none; }
+#a2hs b { font-weight: 700; }
+#a2hs p { margin: 0; }
+#a2hs .x { grid-row: 1 / span 2; grid-column: 2; width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgb(20 17 14 / 0.08); color: #14110e; font-size: 20px; cursor: pointer; }
+#a2hs .go { justify-self: start; min-height: 44px; padding: 0 18px; border: 0; border-radius: 99px; background: #14110e; color: #f3ece3; font: 600 15px system-ui, sans-serif; cursor: pointer; }
+</style>
+<div id="a2hs" role="dialog" aria-label="Pridať na plochu" hidden>
+  <p id="a2hs-t"></p>
+  <button class="x" type="button" aria-label="Zavrieť">✕</button>
+</div>
+<script>
+(() => {
+  const box = document.getElementById('a2hs'), t = document.getElementById('a2hs-t');
+  const standalone = matchMedia('(display-mode: standalone)').matches || matchMedia('(display-mode: fullscreen)').matches || navigator.standalone === true;
+  let seen = false; try { seen = localStorage.getItem('a2hs-poskladaj') === '1'; } catch (e) {}
+  if (standalone || seen) return;
+  const ios = /iPhone|iPad|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  const android = /Android/.test(navigator.userAgent);
+  if (!ios && !android) return;
+  const close = () => { box.hidden = true; try { localStorage.setItem('a2hs-poskladaj', '1'); } catch (e) {} };
+  box.querySelector('.x').addEventListener('click', close);
+  if (ios) {
+    t.innerHTML = '<b>Na celú obrazovku:</b> ťukni na <b>Zdieľať</b> (štvorček so šípkou hore), potom <b>Pridať na plochu</b> a otvor ikonu Poskladaj si.';
+    box.hidden = false; return;
+  }
+  t.innerHTML = '<b>Na celú obrazovku:</b> v menu prehliadača <b>⋮</b> zvoľ <b>Pridať na plochu</b>.';
+  box.hidden = false;
+  addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    t.innerHTML = '<b>Na celú obrazovku</b> ako appka:';
+    const b = document.createElement('button'); b.className = 'go'; b.type = 'button'; b.textContent = 'Pridať na plochu';
+    b.addEventListener('click', async () => { e.prompt(); try { await e.userChoice; } catch (err) {} close(); });
+    t.after(b);
+  });
+})();
+</script>
+</body></html>
